@@ -36,10 +36,9 @@ export default function SoccerCalendarApp() {
   const [games, setGames] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  // 入力用ステート
-  const [inputDate, setInputDate] = useState(""); // 日付 (YYYY-MM-DD)
-  const [inputHour, setInputHour] = useState("09"); // 時
-  const [inputMin, setInputMin] = useState("00"); // 分
+  const [inputDate, setInputDate] = useState(""); 
+  const [inputHour, setInputHour] = useState("09"); 
+  const [inputMin, setInputMin] = useState("00"); 
   const [type, setType] = useState("0");
   const [location, setLocation] = useState("");
   const [opponent, setOpponent] = useState("");
@@ -63,11 +62,9 @@ export default function SoccerCalendarApp() {
 
   const addGame = async () => {
     if (!inputDate || !location) { alert("日付と場所を入力してください"); return; }
-    // 日付と時間を結合して保存 (ISO形式: YYYY-MM-DDTHH:mm)
     const fullDateTime = `${inputDate}T${inputHour}:${inputMin}`;
     await addDoc(collection(db, "games"), { date: fullDateTime, type, location, opponent, memo });
     
-    // リセット
     setInputDate(""); setInputHour("09"); setInputMin("00");
     setType("0"); setLocation(""); setOpponent(""); setMemo("");
   };
@@ -113,13 +110,11 @@ export default function SoccerCalendarApp() {
               </div>
             );
           })}
-          {dayGames.length > 2 && <div className="text-[7px] text-slate-400 text-center font-bold">...他</div>}
         </div>
       </Card>
     );
   }
 
-  // 時間選択肢の生成
   const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
   const minutes = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
 
@@ -167,24 +162,22 @@ export default function SoccerCalendarApp() {
         </div>
       )}
 
-      {/* 入力フォーム (時間選択をプルダウンに変更) */}
+      {/* 入力フォーム (タイトルを日本語に変更) */}
       <Card className="p-6 max-w-md mx-auto bg-slate-50 border-none ring-1 ring-slate-200 shadow-xl mb-10">
-        <h2 className="text-sm font-black mb-6 text-slate-400 uppercase tracking-widest text-center italic">Add New Schedule</h2>
+        <h2 className="text-sm font-black mb-6 text-slate-500 uppercase tracking-widest text-center">予定を登録する</h2>
         <div className="space-y-4">
-          {/* 日付選択 */}
           <div>
-            <label className="text-[10px] font-black text-slate-500 ml-1 uppercase">Date</label>
+            <label className="text-[11px] font-black text-slate-600 ml-1">日付</label>
             <Input type="date" value={inputDate} onChange={(e: any) => setInputDate(e.target.value)} />
           </div>
 
-          {/* 時間選択 (プルダウンで5分刻みを実現) */}
           <div>
-            <label className="text-[10px] font-black text-slate-500 ml-1 uppercase">Start Time (5分単位)</label>
+            <label className="text-[11px] font-black text-slate-600 ml-1">開始時間 (5分単位)</label>
             <div className="flex gap-2 items-center">
               <select className="flex-1 border border-slate-200 rounded-xl p-3 bg-white text-sm font-bold text-slate-900 outline-none" value={inputHour} onChange={(e) => setInputHour(e.target.value)}>
                 {hours.map(h => <option key={h} value={h}>{h}時</option>)}
               </select>
-              <span className="font-bold">:</span>
+              <span className="font-bold text-slate-400">:</span>
               <select className="flex-1 border border-slate-200 rounded-xl p-3 bg-white text-sm font-bold text-slate-900 outline-none" value={inputMin} onChange={(e) => setInputMin(e.target.value)}>
                 {minutes.map(m => <option key={m} value={m}>{m}分</option>)}
               </select>
@@ -192,7 +185,7 @@ export default function SoccerCalendarApp() {
           </div>
 
           <div>
-            <label className="text-[10px] font-black text-slate-500 ml-1 uppercase">Type</label>
+            <label className="text-[11px] font-black text-slate-600 ml-1">練習形式</label>
             <select className="w-full border border-slate-200 rounded-xl p-3 bg-white text-sm font-bold text-slate-900 outline-none" value={type} onChange={(e) => setType(e.target.value)}>
               <option value="0">🏃 練習</option>
               <option value="1">🤝 トレマ</option>
@@ -200,19 +193,23 @@ export default function SoccerCalendarApp() {
               <option value="3">⚽ 他試合</option>
             </select>
           </div>
+
           <div>
-            <label className="text-[10px] font-black text-slate-500 ml-1 uppercase">Location</label>
+            <label className="text-[11px] font-black text-slate-600 ml-1">場所</label>
             <Input placeholder="練習場所・会場" value={location} onChange={(e: any) => setLocation(e.target.value)} />
           </div>
+
           <div>
-            <label className="text-[10px] font-black text-slate-500 ml-1 uppercase">Opponent</label>
-            <Input placeholder="対戦相手名" value={opponent} onChange={(e: any) => setOpponent(e.target.value)} />
+            <label className="text-[11px] font-black text-slate-600 ml-1">対戦相手</label>
+            <Input placeholder="対戦相手名 (任意)" value={opponent} onChange={(e: any) => setOpponent(e.target.value)} />
           </div>
+
           <div>
-            <label className="text-[10px] font-black text-slate-500 ml-1 uppercase">Memo</label>
+            <label className="text-[11px] font-black text-slate-600 ml-1">備考・メモ</label>
             <TextArea placeholder="持ち物、集合時間など" value={memo} onChange={(e: any) => setMemo(e.target.value)} />
           </div>
-          <Button onClick={addGame} className="w-full py-4 rounded-2xl shadow-xl shadow-blue-200 bg-blue-600">予定を保存する</Button>
+
+          <Button onClick={addGame} className="w-full py-4 rounded-2xl shadow-xl shadow-blue-200 bg-blue-600 active:scale-95">保存する</Button>
         </div>
       </Card>
     </div>
