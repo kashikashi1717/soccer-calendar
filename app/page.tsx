@@ -36,13 +36,19 @@ const Input = (props: any) => (
   <input {...props} className="w-full border border-gray-300 rounded-xl p-3 text-slate-900 bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
 );
 
+const Select = ({ value, onChange, options, className = "" }: any) => (
+  <select value={value} onChange={(e) => onChange(e.target.value)} className={`p-2 rounded-lg border border-slate-300 text-xs bg-white font-medium ${className}`}>
+    {options.map((opt: any) => <option key={opt.val} value={opt.val}>{opt.label}</option>)}
+  </select>
+);
+
 export default function SoccerCalendarApp() {
   const [current, setCurrent] = useState(new Date(2026, 3, 1));
   const [games, setGames] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
-  // 手動入力用
+  // 手動入力用ステート
   const [inputDate, setInputDate] = useState(""); 
   const [startH, setStartH] = useState("16"); 
   const [startM, setStartM] = useState("00"); 
@@ -69,6 +75,7 @@ export default function SoccerCalendarApp() {
 
   const toHalfWidth = (str: string) => str ? str.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)) : "";
 
+  // CSVインポート
   const handleCsvUpload = async (e: any) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -86,7 +93,7 @@ export default function SoccerCalendarApp() {
             break;
           }
         }
-        if (headerIndex === -1) throw new Error("CSVのレイアウトを認識できませんでした。");
+        if (headerIndex === -1) throw new Error("CSV形式が正しくありません");
 
         const firstLine = rows[0][0] || "";
         const cleanTitle = toHalfWidth(firstLine);
@@ -103,35 +110,32 @@ export default function SoccerCalendarApp() {
           if (!dayStr || isNaN(parseInt(dayStr))) continue;
 
           const [day, , , practiceType, loc, timeRange, content] = row;
-          const typeStr = practiceType || "";
-          if (typeStr === "オフ" || typeStr === "" || typeStr === "／") continue;
+          if (practiceType === "オフ" || !practiceType || practiceType === "／") continue;
 
           const dateStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${dayStr.padStart(2, '0')}`;
-          const config = getTypeConfig(typeStr);
-          const timeFull = toHalfWidth(timeRange || "09:00～");
+          const timeFull = toHalfWidth(timeRange || "未定");
+          const config = getTypeConfig(practiceType);
 
-          // 重複防止用ID
-          const customId = `${dateStr}_${timeFull.replace(/[:～\-]/g, '')}_${(loc || '未定').replace(/\s/g, '')}`;
+          // 重複防止ID
+          const customId = `${dateStr}_${timeFull.replace(/[:～\-\s]/g, '')}_${(loc || '未定')}`;
 
           batch.set(doc(db, "games", customId), {
             date: dateStr,
-            time: timeFull, // 時間範囲をそのまま保存
+            time: timeFull,
             type: config.typeId,
             location: loc || "未定",
             opponent: content || "",
-            memo: typeStr
+            memo: practiceType
           });
           count++;
         }
 
-        if (count > 0) {
-          if (confirm(`${count} 件の予定を取り込みます。同じ日時の予定は更新されます。`)) {
-            await batch.commit();
-            alert("完了しました！");
-            setCurrent(new Date(targetYear, targetMonth - 1, 1));
-          }
+        if (count > 0 && confirm(`${count}件更新しますか？`)) {
+          await batch.commit();
+          alert("インポート完了");
+          setCurrent(new Date(targetYear, targetMonth - 1, 1));
         }
-      } catch (err: any) { alert(`【エラー】${err.message}`); }
+      } catch (err: any) { alert(err.message); }
       finally { setIsImporting(false); e.target.value = ""; }
     };
     reader.readAsText(file, "UTF-8");
@@ -140,28 +144,27 @@ export default function SoccerCalendarApp() {
   const addGame = async () => {
     if (!inputDate || !location) return alert("日付と場所を入力してください");
     const timeFull = `${startH}:${startM}～${endH}:${endM}`;
-    const customId = `${inputDate}_${startH}${startM}${endH}${endM}_${location.replace(/\s/g, '')}`;
-    await setDoc(doc(db, "games", customId), { 
-      date: inputDate, 
-      time: timeFull, 
-      type, 
-      location, 
-      opponent, 
-      memo: "" 
+    const customId = `${inputDate}_${startH}${startM}${endH}${endM}_${location}`;
+    await setDoc(doc(db, "games", customId), {
+      date: inputDate,
+      time: timeFull,
+      type,
+      location,
+      opponent,
+      memo: ""
     });
     setLocation(""); setOpponent("");
   };
 
-  // カレンダー描画
+  // 描画用データ準備
   const year = current.getFullYear();
   const month = current.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
   const gamesByDate = games.reduce((acc: any, g: any) => {
     if (!g.date) return acc;
-    const key = g.date;
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(g);
+    if (!acc[g.date]) acc[g.date] = [];
+    acc[g.date].push(g);
     return acc;
   }, {});
 
@@ -171,14 +174,14 @@ export default function SoccerCalendarApp() {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dayGames = (gamesByDate[dateStr] || []).sort((a: any, b: any) => a.time.localeCompare(b.time));
     cells.push(
-      <Card key={d} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[115px] cursor-pointer hover:shadow-md transition ${dayGames.length > 0 ? 'bg-blue-50/20' : ''}`}>
-        <div className="text-[10px] font-bold mb-1 border-b border-slate-100">{d}</div>
+      <Card key={d} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[110px] cursor-pointer hover:bg-slate-50 ${dayGames.length > 0 ? 'bg-blue-50/20' : ''}`}>
+        <div className="text-[10px] font-bold mb-1 opacity-50">{d}</div>
         <div className="space-y-1">
           {dayGames.map((g: any) => {
             const cfg = getTypeConfig(g.type);
             return (
-              <div key={g.id} className={`${cfg.color} text-white text-[8px] p-0.5 rounded shadow-sm flex flex-col leading-tight`}>
-                <span className="font-bold truncate">{g.time}</span>
+              <div key={g.id} className={`${cfg.color} text-white text-[8px] p-0.5 rounded flex flex-col leading-tight`}>
+                <span className="font-bold border-b border-white/10">{g.time}</span>
                 <span className="truncate">[{cfg.label}]{g.location}</span>
               </div>
             );
@@ -188,14 +191,16 @@ export default function SoccerCalendarApp() {
     );
   }
 
+  const hourOptions = Array.from({length:24},(_,i)=>({val:String(i).padStart(2,'0'), label:`${i}時`}));
+  const minOptions = ["00","05","10","15","20","25","30","35","40","45","50","55"].map(m=>({val:m, label:`${m}分`}));
+
   return (
     <div className="max-w-4xl mx-auto p-2 md:p-4 bg-white min-h-screen text-slate-900">
       <h1 className="text-xl font-black text-center mb-6">⚽ 部活予定カレンダー</h1>
 
-      <div className="mb-6 p-6 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 flex flex-col items-center">
-        <p className="text-xs font-black text-slate-600 mb-2">CSVファイルを選択してインポート</p>
-        <input type="file" accept=".csv" onChange={handleCsvUpload} disabled={isImporting} className="text-xs" />
-        {isImporting && <p className="mt-2 text-blue-600 animate-pulse text-xs font-bold">解析中...</p>}
+      <div className="mb-6 p-4 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 text-center">
+        <input type="file" accept=".csv" onChange={handleCsvUpload} disabled={isImporting} className="text-xs mb-1" />
+        <p className="text-[9px] text-slate-400 font-bold">※CSVの時間は「15:00～17:00」形式に対応</p>
       </div>
 
       <div className="flex justify-between items-center mb-4 bg-slate-100 p-2 rounded-xl">
@@ -204,30 +209,27 @@ export default function SoccerCalendarApp() {
         <Button onClick={() => setCurrent(new Date(year, month + 1, 1))} className="bg-slate-700">→</Button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 mb-10 text-center">
+      <div className="grid grid-cols-7 gap-1 mb-8">
         {["日", "月", "火", "水", "木", "金", "土"].map((d, i) => (
-          <div key={d} className={`text-[10px] font-bold ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{d}</div>
+          <div key={d} className={`text-[10px] font-bold text-center pb-2 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{d}</div>
         ))}
         {cells}
       </div>
 
-      {/* 詳細モーダル */}
       {selectedDate && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedDate(null)}>
-          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-xl font-black border-b pb-2 mb-4">{selectedDate.replace(/-/g, "/")}</h3>
-            <div className="space-y-4 max-h-[50vh] overflow-y-auto px-1">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-black mb-4 border-b pb-2">{selectedDate.replace(/-/g, "/")}</h3>
+            <div className="space-y-4 max-h-[50vh] overflow-y-auto">
               {(gamesByDate[selectedDate] || []).map((g: any) => {
                 const cfg = getTypeConfig(g.type);
                 return (
                   <div key={g.id} className="p-4 bg-slate-50 rounded-2xl relative border border-slate-100">
-                    <div className={`inline-block px-3 py-0.5 rounded-full text-[10px] font-black text-white mb-2 ${cfg.color}`}>
-                      {cfg.full}
-                    </div>
+                    <span className={`${cfg.color} text-white text-[10px] px-2 py-0.5 rounded-full font-bold mb-2 inline-block`}>{cfg.full}</span>
                     <div className="font-black text-lg">📍 {g.location}</div>
                     <div className="text-sm font-bold text-blue-600 mt-1">🕒 {g.time}</div>
-                    {g.opponent && <div className="text-xs text-slate-500 mt-2 bg-white p-2 rounded-lg border border-slate-100 font-medium">{g.opponent}</div>}
-                    <button onClick={() => { if(confirm("削除しますか？")) deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); }} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 text-xs font-bold">削除</button>
+                    {g.opponent && <div className="text-xs text-slate-500 mt-2 bg-white p-2 rounded-lg">{g.opponent}</div>}
+                    <button onClick={() => { if(confirm("削除？")) deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); }} className="absolute top-4 right-4 text-slate-300 text-xs font-bold hover:text-red-500">削除</button>
                   </div>
                 );
               })}
@@ -237,40 +239,37 @@ export default function SoccerCalendarApp() {
         </div>
       )}
 
-      {/* 手動登録フォーム */}
-      <Card className="p-6 bg-slate-50 border-none shadow-inner">
-        <h3 className="text-center font-black text-slate-500 text-xs uppercase tracking-widest mb-6">手動で予定を追加</h3>
+      {/* 手動登録フォーム (分単位対応) */}
+      <Card className="p-6 bg-slate-50 border-none">
+        <h3 className="text-center font-black text-slate-400 text-[10px] tracking-widest mb-6">NEW SCHEDULE</h3>
         <div className="grid gap-4">
           <div>
             <label className="text-[10px] font-bold text-slate-400 ml-1">日付</label>
             <Input type="date" value={inputDate} onChange={(e:any) => setInputDate(e.target.value)} />
           </div>
-          <div className="flex gap-2">
-            <div className="flex-1">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
               <label className="text-[10px] font-bold text-slate-400 ml-1">区分</label>
               <select className="w-full p-3 rounded-xl border border-slate-300 text-sm font-bold bg-white" value={type} onChange={(e)=>setType(e.target.value)}>
                 <option value="0">🏃 練習</option>
                 <option value="1">🤝 トレマ</option>
                 <option value="2">🏆 リーグ戦</option>
-                <option value="3">⚽ 他試合</option>
               </select>
             </div>
-            <div className="flex-1">
-              <label className="text-[10px] font-bold text-slate-400 ml-1">時間</label>
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 ml-1">時間設定</label>
               <div className="flex items-center gap-1">
-                <select className="p-2 rounded-lg border text-xs bg-white" value={startH} onChange={(e)=>setStartH(e.target.value)}>
-                  {Array.from({length:24},(_,i)=>String(i).padStart(2,'0')).map(h=><option key={h} value={h}>{h}</option>)}
-                </select>
+                <Select value={startH} onChange={setStartH} options={hourOptions} />
+                <Select value={startM} onChange={setStartM} options={minOptions} />
                 <span className="text-[10px]">～</span>
-                <select className="p-2 rounded-lg border text-xs bg-white" value={endH} onChange={(e)=>setEndH(e.target.value)}>
-                  {Array.from({length:24},(_,i)=>String(i).padStart(2,'0')).map(h=><option key={h} value={h}>{h}</option>)}
-                </select>
+                <Select value={endH} onChange={setEndH} options={hourOptions} />
+                <Select value={endM} onChange={setEndM} options={minOptions} />
               </div>
             </div>
           </div>
-          <Input placeholder="場所" value={location} onChange={(e:any) => setLocation(e.target.value)} />
-          <Input placeholder="備考・対戦相手" value={opponent} onChange={(e:any) => setOpponent(e.target.value)} />
-          <Button onClick={addGame} className="py-4 rounded-2xl shadow-lg">登録する</Button>
+          <Input placeholder="場所 (例: 1G)" value={location} onChange={(e:any) => setLocation(e.target.value)} />
+          <Input placeholder="備考 (例: 対鳥商)" value={opponent} onChange={(e:any) => setOpponent(e.target.value)} />
+          <Button onClick={addGame} className="py-4 rounded-2xl shadow-lg">予定を保存する</Button>
         </div>
       </Card>
     </div>
