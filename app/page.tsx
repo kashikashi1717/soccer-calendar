@@ -86,20 +86,29 @@ export default function SoccerCalendarApp() {
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const dayGames = gamesByDate[dateStr] || [];
+    // 時間順に並び替え
+    const dayGames = (gamesByDate[dateStr] || []).sort((a: any, b: any) => a.date.localeCompare(b.date));
+
     cells.push(
-      <Card key={d} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[90px] cursor-pointer ${dayGames.length > 0 ? 'bg-blue-50/20 border-blue-200' : ''}`}>
+      <Card key={d} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[95px] cursor-pointer flex flex-col ${dayGames.length > 0 ? 'bg-blue-50/20 border-blue-200' : ''}`}>
         <div className="text-[10px] font-black border-b border-gray-100 mb-1 text-slate-800">{d}</div>
-        <div className="space-y-0.5 overflow-hidden">
-          {dayGames.slice(0, 3).map((g: any) => {
+        <div className="flex-1 space-y-1 overflow-hidden">
+          {dayGames.slice(0, 2).map((g: any) => {
             const config = getTypeConfig(g.type);
+            const time = g.date.split("T")[1] || "";
             return (
-              <div key={g.id} className={`text-[9px] truncate rounded px-0.5 flex items-center gap-0.5 text-white font-normal ${config.color}`}>
-                <span className="shrink-0">[{config.label}]</span>
-                <span className="truncate">{g.location}</span>
+              <div key={g.id} className={`rounded px-0.5 text-white font-normal ${config.color} leading-tight py-0.5`}>
+                {/* 1段目: 開始時間 */}
+                <div className="text-[8px] font-bold border-b border-white/20 mb-0.5">{time}〜</div>
+                {/* 2段目: 形式と場所 */}
+                <div className="text-[9px] truncate flex items-center gap-0.5">
+                  <span className="shrink-0 font-bold">[{config.label}]</span>
+                  <span className="truncate">{g.location}</span>
+                </div>
               </div>
             );
           })}
+          {dayGames.length > 2 && <div className="text-[7px] text-gray-400 text-center font-bold">他あり</div>}
         </div>
       </Card>
     );
@@ -128,14 +137,14 @@ export default function SoccerCalendarApp() {
           <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-black text-slate-800 border-b pb-2">{selectedDate.replace(/-/g, "/")}</h3>
             <div className="max-h-[50vh] overflow-y-auto space-y-4 pr-1">
-              {gamesByDate[selectedDate]?.map((g: any) => {
+              {(gamesByDate[selectedDate] || []).sort((a: any, b: any) => a.date.localeCompare(b.date)).map((g: any) => {
                 const config = getTypeConfig(g.type);
                 return (
                   <div key={g.id} className="p-4 rounded-2xl border bg-slate-50 relative">
                     <div className={`inline-block px-3 py-1 rounded-full text-[10px] font-black mb-2 text-white ${config.color}`}>{config.full}</div>
                     <div className="text-lg font-black text-slate-900 leading-tight">📍 {g.location}</div>
                     <div className="text-md font-bold text-slate-700 mt-1">{g.opponent ? `vs ${g.opponent}` : "練習・予定"}</div>
-                    <div className="text-sm text-slate-500 mt-2 font-medium">⏰ {g.date.split("T")[1]} 開始</div>
+                    <div className="text-sm text-blue-600 mt-2 font-black flex items-center">🕒 {g.date.split("T")[1]} 開始</div>
                     {g.memo && <div className="mt-3 p-2 bg-white rounded-lg border text-xs text-slate-700 whitespace-pre-wrap">{g.memo}</div>}
                     <button onClick={() => { deleteGame(g.id); setSelectedDate(null); }} className="absolute top-4 right-4 text-red-500 text-[10px] font-black">削除</button>
                   </div>
@@ -147,11 +156,12 @@ export default function SoccerCalendarApp() {
         </div>
       )}
 
+      {/* 入力フォーム */}
       <Card className="p-5 max-w-md mx-auto bg-slate-50 border-none ring-1 ring-slate-200">
         <h2 className="text-sm font-black mb-4 text-slate-400 uppercase tracking-widest text-center">予定を追加</h2>
         <div className="space-y-3">
           <div>
-            <label className="text-[10px] font-bold text-slate-500 ml-1">日付・時間</label>
+            <label className="text-[10px] font-bold text-slate-500 ml-1">日付・開始時間</label>
             <Input type="datetime-local" value={date} onChange={(e: any) => setDate(e.target.value)} />
           </div>
           <div>
