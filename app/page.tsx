@@ -48,7 +48,7 @@ export default function SoccerCalendarApp() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
-  // 手動入力用ステート
+  // 手動入力用
   const [inputDate, setInputDate] = useState(""); 
   const [startH, setStartH] = useState("16"); 
   const [startM, setStartM] = useState("00"); 
@@ -75,6 +75,22 @@ export default function SoccerCalendarApp() {
 
   const toHalfWidth = (str: string) => str ? str.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)) : "";
 
+  // 全データ消去
+  const clearAllData = async () => {
+    if (games.length === 0) return alert("削除するデータがありません");
+    if (confirm(`現在保存されている ${games.length} 件の予定をすべて削除しますか？\n（この操作は取り消せません）`)) {
+      try {
+        const batch = writeBatch(db);
+        games.forEach((game) => {
+          batch.delete(doc(db, "games", game.id));
+        });
+        await batch.commit();
+        alert("すべてのデータを削除しました。");
+        setSelectedDate(null);
+      } catch (err: any) { alert("エラー: " + err.message); }
+    }
+  };
+
   // CSVインポート
   const handleCsvUpload = async (e: any) => {
     const file = e.target.files[0];
@@ -85,13 +101,9 @@ export default function SoccerCalendarApp() {
       try {
         const text = event.target.result as string;
         const rows = text.split(/\r?\n/).map(row => row.split(",").map(cell => cell.trim()));
-
         let headerIndex = -1;
         for (let i = 0; i < Math.min(rows.length, 5); i++) {
-          if (rows[i][0]?.includes("日") && rows[i][3]?.includes("練習")) {
-            headerIndex = i;
-            break;
-          }
+          if (rows[i][0]?.includes("日") && rows[i][3]?.includes("練習")) { headerIndex = i; break; }
         }
         if (headerIndex === -1) throw new Error("CSV形式が正しくありません");
 
@@ -103,34 +115,21 @@ export default function SoccerCalendarApp() {
 
         const batch = writeBatch(db);
         let count = 0;
-
         for (let i = headerIndex + 1; i < rows.length; i++) {
           const row = rows[i];
           const dayStr = toHalfWidth(row[0] || "");
           if (!dayStr || isNaN(parseInt(dayStr))) continue;
-
           const [day, , , practiceType, loc, timeRange, content] = row;
           if (practiceType === "オフ" || !practiceType || practiceType === "／") continue;
 
           const dateStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${dayStr.padStart(2, '0')}`;
           const timeFull = toHalfWidth(timeRange || "未定");
           const config = getTypeConfig(practiceType);
-
-          // 重複防止ID
-          const customId = `${dateStr}_${timeFull.replace(/[:～\-\s]/g, '')}_${(loc || '未定')}`;
-
-          batch.set(doc(db, "games", customId), {
-            date: dateStr,
-            time: timeFull,
-            type: config.typeId,
-            location: loc || "未定",
-            opponent: content || "",
-            memo: practiceType
-          });
+          const customId = `${dateStr}_${timeFull.replace(/[:～\-\s]/g, '')}_${loc}`;
+          batch.set(doc(db, "games", customId), { date: dateStr, time: timeFull, type: config.typeId, location: loc || "未定", opponent: content || "", memo: practiceType });
           count++;
         }
-
-        if (count > 0 && confirm(`${count}件更新しますか？`)) {
+        if (count > 0 && confirm(`${count}件取り込みますか？`)) {
           await batch.commit();
           alert("インポート完了");
           setCurrent(new Date(targetYear, targetMonth - 1, 1));
@@ -145,18 +144,10 @@ export default function SoccerCalendarApp() {
     if (!inputDate || !location) return alert("日付と場所を入力してください");
     const timeFull = `${startH}:${startM}～${endH}:${endM}`;
     const customId = `${inputDate}_${startH}${startM}${endH}${endM}_${location}`;
-    await setDoc(doc(db, "games", customId), {
-      date: inputDate,
-      time: timeFull,
-      type,
-      location,
-      opponent,
-      memo: ""
-    });
+    await setDoc(doc(db, "games", customId), { date: inputDate, time: timeFull, type, location, opponent, memo: "" });
     setLocation(""); setOpponent("");
   };
 
-  // 描画用データ準備
   const year = current.getFullYear();
   const month = current.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -191,16 +182,16 @@ export default function SoccerCalendarApp() {
     );
   }
 
-  const hourOptions = Array.from({length:24},(_,i)=>({val:String(i).padStart(2,'0'), label:`${i}時`}));
-  const minOptions = ["00","05","10","15","20","25","30","35","40","45","50","55"].map(m=>({val:m, label:`${m}分`}));
-
   return (
     <div className="max-w-4xl mx-auto p-2 md:p-4 bg-white min-h-screen text-slate-900">
       <h1 className="text-xl font-black text-center mb-6">⚽ 部活予定カレンダー</h1>
 
-      <div className="mb-6 p-4 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 text-center">
-        <input type="file" accept=".csv" onChange={handleCsvUpload} disabled={isImporting} className="text-xs mb-1" />
-        <p className="text-[9px] text-slate-400 font-bold">※CSVの時間は「15:00～17:00」形式に対応</p>
+      <div className="mb-6 p-4 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 flex flex-col items-center">
+        <input type="file" accept=".csv" onChange={handleCsvUpload} disabled={isImporting} className="text-xs mb-2" />
+        <div className="flex gap-2">
+          <p className="text-[9px] text-slate-400 font-bold self-center">CSVインポート</p>
+          <button onClick={clearAllData} className="text-[9px] font-bold text-red-500 border border-red-200 px-2 py-1 rounded hover:bg-red-50">データを全消去する</button>
+        </div>
       </div>
 
       <div className="flex justify-between items-center mb-4 bg-slate-100 p-2 rounded-xl">
@@ -229,7 +220,7 @@ export default function SoccerCalendarApp() {
                     <div className="font-black text-lg">📍 {g.location}</div>
                     <div className="text-sm font-bold text-blue-600 mt-1">🕒 {g.time}</div>
                     {g.opponent && <div className="text-xs text-slate-500 mt-2 bg-white p-2 rounded-lg">{g.opponent}</div>}
-                    <button onClick={() => { if(confirm("削除？")) deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); }} className="absolute top-4 right-4 text-slate-300 text-xs font-bold hover:text-red-500">削除</button>
+                    <button onClick={() => { if(confirm("この予定を削除しますか？")) deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); }} className="absolute top-4 right-4 text-slate-300 text-xs font-bold hover:text-red-500">削除</button>
                   </div>
                 );
               })}
@@ -239,9 +230,8 @@ export default function SoccerCalendarApp() {
         </div>
       )}
 
-      {/* 手動登録フォーム (分単位対応) */}
       <Card className="p-6 bg-slate-50 border-none">
-        <h3 className="text-center font-black text-slate-400 text-[10px] tracking-widest mb-6">NEW SCHEDULE</h3>
+        <h3 className="text-center font-black text-slate-400 text-[10px] tracking-widest mb-6 uppercase">New Schedule</h3>
         <div className="grid gap-4">
           <div>
             <label className="text-[10px] font-bold text-slate-400 ml-1">日付</label>
@@ -259,11 +249,11 @@ export default function SoccerCalendarApp() {
             <div>
               <label className="text-[10px] font-bold text-slate-400 ml-1">時間設定</label>
               <div className="flex items-center gap-1">
-                <Select value={startH} onChange={setStartH} options={hourOptions} />
-                <Select value={startM} onChange={setStartM} options={minOptions} />
+                <Select value={startH} onChange={setStartH} options={Array.from({length:24},(_,i)=>({val:String(i).padStart(2,'0'), label:`${i}時`}))} />
+                <Select value={startM} onChange={setStartM} options={["00","15","30","45"].map(m=>({val:m, label:`${m}分`}))} />
                 <span className="text-[10px]">～</span>
-                <Select value={endH} onChange={setEndH} options={hourOptions} />
-                <Select value={endM} onChange={setEndM} options={minOptions} />
+                <Select value={endH} onChange={setEndH} options={Array.from({length:24},(_,i)=>({val:String(i).padStart(2,'0'), label:`${i}時`}))} />
+                <Select value={endM} onChange={setEndM} options={["00","15","30","45"].map(m=>({val:m, label:`${m}分`}))} />
               </div>
             </div>
           </div>
