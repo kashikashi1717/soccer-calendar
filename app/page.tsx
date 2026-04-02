@@ -193,6 +193,8 @@ export default function SoccerCalendarApp() {
     <div className="p-2 md:p-4 max-w-4xl mx-auto bg-white min-h-screen text-slate-900 font-sans">
       <h1 className="text-xl font-black mb-4 text-center text-slate-900">⚽ 練習カレンダー</h1>
 
+// ... 前後のコードはそのまま ...
+
       {/* エラー処理付きインポートエリア */}
       <div className="mb-6 bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center gap-3">
         <div className="text-center">
@@ -201,13 +203,16 @@ export default function SoccerCalendarApp() {
         </div>
         <input 
           type="file" 
-          accept=".csv" 
+          /* accept属性を拡張して、スマホのファイル選択でグレーアウトしにくくします */
+          accept=".csv, text/csv, text/comma-separated-values, application/csv" 
           disabled={isImporting}
           onChange={handleCsvUpload} 
           className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-slate-700 file:text-white cursor-pointer disabled:opacity-50" 
         />
         {isImporting && <p className="text-[10px] text-blue-600 font-bold animate-pulse">解析中...</p>}
       </div>
+
+// ... 残りのコードもそのまま ...
 
       <div className="flex justify-between items-center mb-4">
         <Button onClick={() => setCurrent(new Date(year, month - 1, 1))} className="bg-slate-700">←</Button>
