@@ -77,7 +77,6 @@ export default function SoccerCalendarApp() {
 
   const toHalfWidth = (str: string) => str ? str.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)) : "";
 
-  // 全データ消去
   const clearAllData = async () => {
     if (games.length === 0) return alert("削除するデータがありません");
     if (confirm(`保存されている ${games.length} 件の予定をすべて削除しますか？`)) {
@@ -88,7 +87,6 @@ export default function SoccerCalendarApp() {
     }
   };
 
-  // CSVインポート
   const handleCsvUpload = async (e: any) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -134,7 +132,6 @@ export default function SoccerCalendarApp() {
     reader.readAsText(file, "UTF-8");
   };
 
-  // 保存・更新
   const saveGame = async () => {
     if (!inputDate || !location) return alert("日付と場所を入力してください");
     const timeFull = `${startH}:${startM}～${endH}:${endM}`;
@@ -179,7 +176,6 @@ export default function SoccerCalendarApp() {
     return acc;
   }, {});
 
-  // --- 今日の判定用 ---
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
   const cells = [];
@@ -238,12 +234,7 @@ export default function SoccerCalendarApp() {
           <h2 className="text-lg font-black min-w-[120px] text-center">{year}年 {month + 1}月</h2>
           <Button onClick={() => setCurrent(new Date(year, month + 1, 1))} className="bg-slate-700">→</Button>
         </div>
-        <button 
-          onClick={() => setCurrent(new Date(today.getFullYear(), today.getMonth(), 1))}
-          className="text-xs font-bold bg-white text-slate-600 px-4 py-2 rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 active:scale-95 transition"
-        >
-          今日を表示
-        </button>
+        <button onClick={() => setCurrent(new Date(today.getFullYear(), today.getMonth(), 1))} className="text-xs font-bold bg-white text-slate-600 px-4 py-2 rounded-lg shadow-sm border border-slate-200">今日を表示</button>
       </div>
 
       <div className="grid grid-cols-7 gap-1 mb-8">
@@ -265,7 +256,6 @@ export default function SoccerCalendarApp() {
                     <span className={`${cfg.color} text-white text-[10px] px-2 py-0.5 rounded-full font-bold mb-2 inline-block`}>{cfg.full}</span>
                     <div className="font-black text-lg">📍 {g.location}</div>
                     <div className="text-sm font-bold text-blue-600 mt-1">🕒 {g.time}</div>
-                    {g.opponent && <div className="text-[10px] text-slate-500 mt-1">{g.opponent}</div>}
                     <div className="flex gap-4 mt-3 pt-2 border-t border-slate-200">
                       <button onClick={() => startEdit(g)} className="text-blue-500 text-[10px] font-bold">編集する</button>
                       <button onClick={() => { if(confirm("削除しますか？")) deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); }} className="text-red-400 text-[10px] font-bold">削除</button>
@@ -279,6 +269,7 @@ export default function SoccerCalendarApp() {
         </div>
       )}
 
+      {/* 入力フォーム */}
       <Card className={`p-4 md:p-6 border-none relative z-10 transition-colors duration-500 ${editingGameId ? 'bg-blue-50 ring-2 ring-blue-500' : 'bg-slate-50'}`}>
         <h3 className="text-center font-black text-slate-400 text-[10px] tracking-widest mb-6 uppercase">
           {editingGameId ? "Edit Schedule" : "New Schedule"}
@@ -316,8 +307,18 @@ export default function SoccerCalendarApp() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input placeholder="場所 (例: 1G)" value={location} onChange={(e:any) => setLocation(e.target.value)} />
-            <Input placeholder="対戦相手など" value={opponent} onChange={(e:any) => setOpponent(e.target.value)} />
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 ml-1">場所</label>
+              <div className="flex gap-2 mb-2">
+                <button onClick={() => setLocation("1G")} className="flex-1 py-2 text-xs font-bold bg-white border border-slate-300 rounded-lg hover:bg-blue-500 hover:text-white transition">1G</button>
+                <button onClick={() => setLocation("2G")} className="flex-1 py-2 text-xs font-bold bg-white border border-slate-300 rounded-lg hover:bg-blue-500 hover:text-white transition">2G</button>
+              </div>
+              <Input placeholder="場所を自由入力 (例: 米子西)" value={location} onChange={(e:any) => setLocation(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 ml-1">対戦相手など</label>
+              <Input placeholder="備考 (例: 対鳥商)" value={opponent} onChange={(e:any) => setOpponent(e.target.value)} />
+            </div>
           </div>
           
           <div className="flex gap-2">
