@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Soccer Schedule",
-  description: "練習スケジュール管理アプリ",
+  description: "邱ｴ鄙偵せ繧ｱ繧ｸ繝･繝ｼ繝ｫ邂｡逅�繧｢繝励Μ",
 };
 
 export default function RootLayout({
