@@ -43,7 +43,8 @@ const Select = ({ value, onChange, options, className = "" }: any) => (
 );
 
 export default function SoccerCalendarApp() {
-  const [current, setCurrent] = useState(new Date(2026, 3, 1));
+  const today = new Date();
+  const [current, setCurrent] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [games, setGames] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -133,24 +134,19 @@ export default function SoccerCalendarApp() {
     reader.readAsText(file, "UTF-8");
   };
 
-  // 保存・更新処理
+  // 保存・更新
   const saveGame = async () => {
     if (!inputDate || !location) return alert("日付と場所を入力してください");
     const timeFull = `${startH}:${startM}～${endH}:${endM}`;
-    
     try {
       if (editingGameId) {
-        // 編集時
         await updateDoc(doc(db, "games", editingGameId), { date: inputDate, time: timeFull, type, location, opponent });
-        alert("更新しました");
       } else {
-        // 新規登録時
         const customId = `${inputDate}_${startH}${startM}${endH}${endM}_${location}`;
         await setDoc(doc(db, "games", customId), { date: inputDate, time: timeFull, type, location, opponent, memo: "" });
-        alert("保存しました");
       }
       resetForm();
-    } catch (e: any) { alert("エラー: " + e.message); }
+    } catch (e: any) { alert(e.message); }
   };
 
   const resetForm = () => {
@@ -161,7 +157,6 @@ export default function SoccerCalendarApp() {
     const [start, end] = g.time.split("～");
     const [sh, sm] = (start || "00:00").split(":");
     const [eh, em] = (end || "00:00").split(":");
-    
     setEditingGameId(g.id);
     setInputDate(g.date);
     setStartH(sh); setStartM(sm);
@@ -169,7 +164,7 @@ export default function SoccerCalendarApp() {
     setType(g.type);
     setLocation(g.location);
     setOpponent(g.opponent || "");
-    setSelectedDate(null); // モーダルを閉じてフォームへスクロール
+    setSelectedDate(null);
     window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
   };
 
@@ -184,14 +179,27 @@ export default function SoccerCalendarApp() {
     return acc;
   }, {});
 
+  // --- 今日の判定用 ---
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
   const cells = [];
   for (let i = 0; i < firstDay; i++) cells.push(<div key={`empty-${i}`} />);
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dayGames = (gamesByDate[dateStr] || []).sort((a: any, b: any) => a.time.localeCompare(b.time));
+    const isToday = dateStr === todayStr;
+
     cells.push(
-      <Card key={d} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[100px] cursor-pointer hover:bg-slate-50 ${dayGames.length > 0 ? 'bg-blue-50/20' : ''}`}>
-        <div className="text-[10px] font-bold mb-1 opacity-40">{d}</div>
+      <Card 
+        key={d} 
+        onClick={() => setSelectedDate(dateStr)} 
+        className={`p-1 min-h-[100px] cursor-pointer hover:bg-slate-50 transition-colors 
+          ${dayGames.length > 0 ? 'bg-blue-50/20' : ''} 
+          ${isToday ? 'bg-yellow-50 ring-2 ring-yellow-200 border-yellow-200' : ''}`}
+      >
+        <div className={`text-[10px] font-bold mb-1 ${isToday ? 'text-yellow-700' : 'opacity-40'}`}>
+          {d}{isToday && " (今日)"}
+        </div>
         <div className="space-y-1">
           {dayGames.map((g: any) => {
             const cfg = getTypeConfig(g.type);
@@ -224,10 +232,18 @@ export default function SoccerCalendarApp() {
         </div>
       </div>
 
-      <div className="flex justify-between items-center mb-4 bg-slate-100 p-2 rounded-xl">
-        <Button onClick={() => setCurrent(new Date(year, month - 1, 1))} className="bg-slate-700">←</Button>
-        <h2 className="text-lg font-black">{year}年 {month + 1}月</h2>
-        <Button onClick={() => setCurrent(new Date(year, month + 1, 1))} className="bg-slate-700">→</Button>
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-4 bg-slate-100 p-2 rounded-xl gap-2">
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setCurrent(new Date(year, month - 1, 1))} className="bg-slate-700">←</Button>
+          <h2 className="text-lg font-black min-w-[120px] text-center">{year}年 {month + 1}月</h2>
+          <Button onClick={() => setCurrent(new Date(year, month + 1, 1))} className="bg-slate-700">→</Button>
+        </div>
+        <button 
+          onClick={() => setCurrent(new Date(today.getFullYear(), today.getMonth(), 1))}
+          className="text-xs font-bold bg-white text-slate-600 px-4 py-2 rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 active:scale-95 transition"
+        >
+          今日を表示
+        </button>
       </div>
 
       <div className="grid grid-cols-7 gap-1 mb-8">
@@ -263,7 +279,6 @@ export default function SoccerCalendarApp() {
         </div>
       )}
 
-      {/* 入力フォーム */}
       <Card className={`p-4 md:p-6 border-none relative z-10 transition-colors duration-500 ${editingGameId ? 'bg-blue-50 ring-2 ring-blue-500' : 'bg-slate-50'}`}>
         <h3 className="text-center font-black text-slate-400 text-[10px] tracking-widest mb-6 uppercase">
           {editingGameId ? "Edit Schedule" : "New Schedule"}
