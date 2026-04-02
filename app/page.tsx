@@ -48,7 +48,7 @@ export default function SoccerCalendarApp() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
-  // 手動入力用ステート
+  // 手動入力用
   const [inputDate, setInputDate] = useState(""); 
   const [startH, setStartH] = useState("16"); 
   const [startM, setStartM] = useState("00"); 
@@ -183,12 +183,18 @@ export default function SoccerCalendarApp() {
     <div className="max-w-4xl mx-auto p-2 md:p-4 bg-white min-h-screen text-slate-900 pb-10">
       <h1 className="text-xl font-black text-center mb-6">⚽ 部活予定カレンダー</h1>
 
-      {/* インポート・消去セクション: Z-indexとレイアウトを整理 */}
       <div className="mb-6 p-4 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 relative z-10">
         <div className="flex flex-col items-center space-y-4">
-          <div className="w-full max-w-xs">
-            <label className="block text-[10px] font-bold text-slate-400 mb-1 text-center">CSVファイルを選択</label>
-            <input type="file" accept=".csv" onChange={handleCsvUpload} disabled={isImporting} className="text-xs w-full block bg-white p-2 rounded-lg border border-slate-200" />
+          <div className="w-full max-w-xs text-center">
+            <label className="block text-[10px] font-bold text-slate-400 mb-1">CSVファイルを選択</label>
+            {/* 修正ポイント: accept を拡張し、MIMEタイプも指定 */}
+            <input 
+              type="file" 
+              accept=".csv, text/csv, application/vnd.ms-excel" 
+              onChange={handleCsvUpload} 
+              disabled={isImporting} 
+              className="text-xs w-full block bg-white p-2 rounded-lg border border-slate-200" 
+            />
           </div>
           <button onClick={clearAllData} className="text-[10px] font-bold text-red-500 bg-white border border-red-100 px-4 py-2 rounded-full shadow-sm active:bg-red-50">
             全データを一括消去する
@@ -231,7 +237,6 @@ export default function SoccerCalendarApp() {
         </div>
       )}
 
-      {/* 手動登録フォーム: スマホでの時間入力を改善 */}
       <Card className="p-4 md:p-6 bg-slate-50 border-none relative z-10">
         <h3 className="text-center font-black text-slate-400 text-[10px] tracking-widest mb-6 uppercase">New Schedule</h3>
         <div className="grid gap-4">
