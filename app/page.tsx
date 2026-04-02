@@ -52,7 +52,7 @@ export default function SoccerCalendarApp() {
   const [opponent, setOpponent] = useState("");
   const [location, setLocation] = useState("");
   const [type, setType] = useState("練習");
-  const [memo, setMemo] = useState(""); // 備考
+  const [memo, setMemo] = useState("");
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "games"), (snapshot) => {
@@ -86,21 +86,19 @@ export default function SoccerCalendarApp() {
     return acc;
   }, {});
 
+  // 形式ごとの略称と色設定
+  const getTypeConfig = (t: string) => {
+    if (t === "練習") return { label: "練", color: "bg-gray-500" };
+    if (t === "トレマ") return { label: "ト", color: "bg-green-600" };
+    if (t === "リーグ戦") return { label: "リ", color: "bg-blue-600" };
+    if (t === "他試合") return { label: "他", color: "bg-orange-500" };
+    return { label: "？", color: "bg-slate-400" };
+  };
+
   const cells = [];
   for (let i = 0; i < firstDay; i++) {
     cells.push(<div key={`empty-${i}`} className="p-1 border border-transparent" />);
   }
-
-  // 形式ごとの略称と色設定
-  const getTypeConfig = (t: string) => {
-    switch (t) {
-      case "練習": return { label: "練", color: "bg-gray-500" };
-      case "トレマ": return { label: "ト", color: "bg-green-600" };
-      case "リーグ戦": return { label: "リ", color: "bg-blue-600" };
-      case "他試合": return { label: "他", color: "bg-orange-500" };
-      default: return { label: "？", color: "bg-slate-400" };
-    }
-  };
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = formatDateKey(new Date(year, month, d));
@@ -110,15 +108,16 @@ export default function SoccerCalendarApp() {
       <Card 
         key={d} 
         onClick={() => setSelectedDate(dateStr)} 
-        className={`p-1 min-h-[85px] cursor-pointer hover:bg-blue-50 transition-colors ${dayGames.length > 0 ? 'border-blue-200 bg-blue-50/20' : ''}`}
+        className={`p-1 min-h-[85px] cursor-pointer hover:bg-blue-50 transition-colors ${dayGames.length > 0 ? 'border-blue-200 bg-blue-50/10' : ''}`}
       >
         <div className="text-[10px] font-black border-b border-gray-100 mb-1 text-slate-800">{d}</div>
         <div className="space-y-0.5">
           {dayGames.slice(0, 3).map((g: any) => {
             const config = getTypeConfig(g.type);
             return (
-              <div key={g.id} className={`text-[9px] truncate rounded px-1 flex items-center gap-0.5 text-white ${config.color}`}>
-                <span className="font-black shrink-0">[{config.label}]</span>
+              // font-normal に変更し、太字を解除
+              <div key={g.id} className={`text-[9px] truncate rounded px-0.5 flex items-center gap-0.5 text-white font-normal ${config.color}`}>
+                <span className="shrink-0">[{config.label}]</span>
                 <span className="truncate">{g.opponent}</span>
               </div>
             );
@@ -131,7 +130,9 @@ export default function SoccerCalendarApp() {
 
   return (
     <div className="p-2 md:p-4 max-w-4xl mx-auto bg-white min-h-screen text-slate-900 relative font-sans">
-      <h1 className="text-xl font-black mb-4 text-center tracking-tight">⚽ 試合カレンダー（蒼一朗）</h1>
+      <meta charSet="utf-8" />
+      
+      <h1 className="text-xl font-black mb-4 text-center tracking-tight text-slate-900">⚽ 試合カレンダー（蒼一朗）</h1>
 
       <div className="flex justify-between items-center mb-4 bg-slate-50 p-2 rounded-xl border border-slate-200">
         <Button onClick={() => setCurrent(new Date(year, month - 1, 1))} className="px-3 bg-slate-700">←</Button>
@@ -185,23 +186,22 @@ export default function SoccerCalendarApp() {
 
       {/* 追加フォーム */}
       <Card className="p-5 max-w-md mx-auto bg-slate-50 border-none ring-1 ring-slate-200 shadow-none">
-        <h2 className="text-sm font-black mb-4 text-slate-500 uppercase tracking-widest">予定を追加</h2>
+        <h2 className="text-sm font-black mb-4 text-slate-500 uppercase tracking-widest text-slate-400">予定を追加</h2>
         <div className="space-y-3">
           <Input type="datetime-local" value={date} onChange={(e: any) => setDate(e.target.value)} />
           <Input placeholder="対戦相手" value={opponent} onChange={(e: any) => setOpponent(e.target.value)} />
           <Input placeholder="場所" value={location} onChange={(e: any) => setLocation(e.target.value)} />
           
           <div className="grid grid-cols-2 gap-2">
-            <select className="border border-slate-200 rounded-xl p-3 bg-white text-sm font-bold" value={type} onChange={(e) => setType(e.target.value)}>
-              <option value="練習">🏃 練習</option>
-              <option value="トレマ">🤝 トレマ</option>
-              <option value="リーグ戦">🏆 リーグ戦</option>
-              <option value="他試合">⚽ 他試合</option>
+            <select className="border border-slate-200 rounded-xl p-3 bg-white text-sm font-bold text-slate-900" value={type} onChange={(e) => setType(e.target.value)}>
+              <option value="練習">練習</option>
+              <option value="トレマ">トレマ</option>
+              <option value="リーグ戦">リーグ戦</option>
+              <option value="他試合">他試合</option>
             </select>
-            <div className="text-[10px] text-slate-400 flex items-center">形式を選択してください</div>
           </div>
 
-          <TextArea placeholder="備考・メモ（集合時間、持ち物など）" value={memo} onChange={(e: any) => setMemo(e.target.value)} />
+          <TextArea placeholder="備考・メモ" value={memo} onChange={(e: any) => setMemo(e.target.value)} />
           
           <Button onClick={addGame} className="w-full py-4 text-md mt-2 rounded-2xl shadow-xl shadow-blue-100">保存する</Button>
         </div>
