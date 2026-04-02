@@ -43,7 +43,7 @@ export default function SoccerCalendarApp() {
   const today = new Date();
   const [current, setCurrent] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [games, setGames] = useState<any[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null); // タップされた日を管理
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const [date, setDate] = useState("");
   const [opponent, setOpponent] = useState("");
@@ -94,80 +94,87 @@ export default function SoccerCalendarApp() {
     cells.push(
       <Card 
         key={d} 
-        onClick={() => setSelectedDate(dateStr)} // 日付タップで選択
-        className={`p-1 min-h-[85px] cursor-pointer hover:bg-blue-50 transition-colors ${dayGames.length > 0 ? 'border-blue-300 bg-blue-50/30' : ''}`}
+        onClick={() => setSelectedDate(dateStr)} 
+        className={`p-1 min-h-[85px] cursor-pointer hover:bg-blue-50 transition-colors ${dayGames.length > 0 ? 'border-blue-200 bg-blue-50/20' : ''}`}
       >
-        <div className="text-xs font-bold border-b border-gray-100 mb-1 text-slate-800">{d}</div>
-        <div className="space-y-1">
-          {dayGames.slice(0, 2).map((g: any) => (
-            <div key={g.id} className="text-[9px] truncate bg-blue-600 text-white rounded px-1">
-              {g.opponent}
+        <div className="text-[10px] font-bold border-b border-gray-100 mb-1 text-slate-800">{d}</div>
+        <div className="space-y-0.5">
+          {dayGames.slice(0, 3).map((g: any) => (
+            <div key={g.id} className={`text-[9px] truncate rounded px-1 flex items-center gap-1 ${g.type === "リーグ戦" ? "bg-blue-600 text-white" : "bg-green-600 text-white"}`}>
+              <span className="font-black shrink-0">[{g.type === "リーグ戦" ? "リ" : "練"}]</span>
+              <span className="truncate">{g.opponent}</span>
             </div>
           ))}
-          {dayGames.length > 2 && <div className="text-[8px] text-gray-400 text-center">他{dayGames.length - 2}件</div>}
+          {dayGames.length > 3 && <div className="text-[8px] text-gray-400 text-center">...他</div>}
         </div>
       </Card>
     );
   }
 
   return (
-    <div className="p-2 md:p-4 max-w-4xl mx-auto bg-white min-h-screen text-slate-900 relative">
-      <h1 className="text-xl font-extrabold mb-4 text-center">⚽ 試合カレンダー（蒼一朗）</h1>
+    <div className="p-2 md:p-4 max-w-4xl mx-auto bg-white min-h-screen text-slate-900 relative font-sans">
+      <h1 className="text-xl font-black mb-4 text-center tracking-tight">⚽ 試合カレンダー（蒼一朗）</h1>
 
-      <div className="flex justify-between items-center mb-4 bg-gray-50 p-2 rounded-lg border border-gray-200">
-        <Button onClick={() => setCurrent(new Date(year, month - 1, 1))} className="px-3">←</Button>
-        <div className="text-lg font-bold">{year}年 {month + 1}月</div>
-        <Button onClick={() => setCurrent(new Date(year, month + 1, 1))} className="px-3">→</Button>
+      <div className="flex justify-between items-center mb-4 bg-slate-50 p-2 rounded-xl border border-slate-200">
+        <Button onClick={() => setCurrent(new Date(year, month - 1, 1))} className="px-3 bg-slate-700">←</Button>
+        <div className="text-lg font-black text-slate-800">{year}年 {month + 1}月</div>
+        <Button onClick={() => setCurrent(new Date(year, month + 1, 1))} className="px-3 bg-slate-700">→</Button>
       </div>
 
       <div className="grid grid-cols-7 gap-1 mb-6">
         {["日", "月", "火", "水", "木", "金", "土"].map((d, i) => (
-          <div key={d} className={`text-center text-xs font-bold ${i === 0 ? "text-red-600" : i === 6 ? "text-blue-600" : "text-slate-400"}`}>{d}</div>
+          <div key={d} className={`text-center text-[10px] font-black uppercase ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-slate-400"}`}>{d}</div>
         ))}
         {cells}
       </div>
 
       {/* 詳細表示モーダル */}
       {selectedDate && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setSelectedDate(null)}>
-          <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center border-b pb-2">
-              <h3 className="text-lg font-bold text-blue-900">{selectedDate.replace(/-/g, "/")} の詳細</h3>
-              <button onClick={() => setSelectedDate(null)} className="text-2xl text-gray-400">&times;</button>
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedDate(null)}>
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-xl font-black text-slate-800">{selectedDate.replace(/-/g, "/")}</h3>
+              <button onClick={() => setSelectedDate(null)} className="w-8 h-8 flex items-center justify-center bg-slate-100 rounded-full text-slate-400 text-xl font-bold">&times;</button>
             </div>
             
-            <div className="max-h-[40vh] overflow-y-auto space-y-3">
+            <div className="max-h-[50vh] overflow-y-auto space-y-4">
               {gamesByDate[selectedDate]?.length > 0 ? (
                 gamesByDate[selectedDate].map((g: any) => (
-                  <div key={g.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100 relative">
-                    <div className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mb-1 bg-blue-100 text-blue-700">{g.type}</div>
-                    <div className="text-base font-bold text-slate-900">vs {g.opponent}</div>
-                    <div className="text-sm text-slate-600 mt-1">📍 {g.location}</div>
-                    <div className="text-sm text-slate-500">⏰ {g.date.split("T")[1]}</div>
-                    <button onClick={() => { deleteGame(g.id); setSelectedDate(null); }} className="absolute top-3 right-3 text-red-500 text-xs font-bold bg-red-50 px-2 py-1 rounded">削除</button>
+                  <div key={g.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 relative group">
+                    <div className={`inline-block px-3 py-1 rounded-full text-[10px] font-black mb-2 shadow-sm ${g.type === "リーグ戦" ? "bg-blue-600 text-white" : "bg-green-600 text-white"}`}>
+                      {g.type}
+                    </div>
+                    <div className="text-lg font-black text-slate-900 leading-tight">vs {g.opponent}</div>
+                    <div className="text-sm text-slate-500 mt-2 flex items-center gap-1 font-medium">📍 {g.location}</div>
+                    <div className="text-sm text-slate-400 flex items-center gap-1 font-medium">⏰ {g.date.split("T")[1]} 開始</div>
+                    <button onClick={() => { deleteGame(g.id); setSelectedDate(null); }} className="absolute top-4 right-4 text-red-500 text-[10px] font-black bg-white border border-red-100 px-2 py-1 rounded-lg shadow-sm">削除</button>
                   </div>
                 ))
               ) : (
-                <p className="text-center text-gray-400 py-4 text-sm">予定はありません</p>
+                <div className="text-center py-10">
+                  <p className="text-slate-300 text-sm font-bold italic">No Games Scheduled</p>
+                </div>
               )}
             </div>
-            <Button onClick={() => setSelectedDate(null)} className="w-full py-3 bg-slate-800">閉じる</Button>
+            <Button onClick={() => setSelectedDate(null)} className="w-full py-4 bg-slate-900 rounded-2xl shadow-lg shadow-slate-200">閉じる</Button>
           </div>
         </div>
       )}
 
       {/* 追加フォーム */}
-      <Card className="p-4 max-w-md mx-auto bg-gray-50 border-2 shadow-none">
-        <h2 className="text-md font-bold mb-3 border-b border-gray-300 pb-1">試合予定の追加</h2>
-        <div className="space-y-2">
+      <Card className="p-5 max-w-md mx-auto bg-slate-50 border-none shadow-none ring-1 ring-slate-200">
+        <h2 className="text-sm font-black mb-4 text-slate-500 uppercase tracking-widest">Add New Game</h2>
+        <div className="space-y-3">
           <Input type="datetime-local" value={date} onChange={(e: any) => setDate(e.target.value)} />
-          <Input placeholder="対戦相手" value={opponent} onChange={(e: any) => setOpponent(e.target.value)} />
-          <Input placeholder="場所" value={location} onChange={(e: any) => setLocation(e.target.value)} />
-          <select className="w-full border border-gray-300 rounded-md p-2 bg-white text-sm" value={type} onChange={(e) => setType(e.target.value)}>
-            <option value="リーグ戦">リーグ戦</option>
-            <option value="練習試合">練習試合</option>
-          </select>
-          <Button onClick={addGame} className="w-full py-3 text-md mt-2">試合を追加</Button>
+          <Input placeholder="対戦相手を入力" value={opponent} onChange={(e: any) => setOpponent(e.target.value)} />
+          <Input placeholder="試合会場・場所" value={location} onChange={(e: any) => setLocation(e.target.value)} />
+          <div className="relative">
+            <select className="w-full border border-slate-200 rounded-xl p-3 bg-white text-sm font-bold appearance-none ring-offset-2 focus:ring-2 focus:ring-blue-500" value={type} onChange={(e) => setType(e.target.value)}>
+              <option value="リーグ戦">🏆 リーグ戦</option>
+              <option value="練習試合">⚽ 練習試合</option>
+            </select>
+          </div>
+          <Button onClick={addGame} className="w-full py-4 text-md mt-2 rounded-2xl shadow-xl shadow-blue-100">保存する</Button>
         </div>
       </Card>
     </div>
