@@ -76,13 +76,29 @@ export default function SoccerCalendarApp() {
 
   const toHalfWidth = (str: string) => str ? str.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)) : "";
 
+  // 全削除
   const clearAllData = async () => {
     if (games.length === 0) return alert("削除するデータがありません");
-    if (confirm(`保存されている ${games.length} 件の予定をすべて削除しますか？`)) {
+    if (confirm(`保存されている全 ${games.length} 件の予定をすべて削除しますか？`)) {
       const batch = writeBatch(db);
       games.forEach((game) => batch.delete(doc(db, "games", game.id)));
       await batch.commit();
-      alert("削除しました");
+      alert("全データを削除しました");
+    }
+  };
+
+  // 月別削除
+  const deleteMonthData = async () => {
+    const targetYearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+    const monthGames = games.filter(g => g.date && g.date.startsWith(targetYearMonth));
+    
+    if (monthGames.length === 0) return alert(`${month + 1}月のデータはありません`);
+    
+    if (confirm(`${month + 1}月のデータ (${monthGames.length}件) をすべて削除しますか？`)) {
+      const batch = writeBatch(db);
+      monthGames.forEach((game) => batch.delete(doc(db, "games", game.id)));
+      await batch.commit();
+      alert(`${month + 1}月のデータを削除しました`);
     }
   };
 
@@ -221,7 +237,7 @@ export default function SoccerCalendarApp() {
     <div className="max-w-4xl mx-auto p-2 md:p-4 bg-white min-h-screen text-slate-900 pb-20">
       <h1 className="text-xl font-black text-center mb-6">⚽ 部活予定カレンダー</h1>
 
-      {/* 1. ナビゲーション（上部） */}
+      {/* 1. ナビゲーション */}
       <div className="flex flex-col sm:flex-row justify-between items-center mb-4 bg-slate-100 p-2 rounded-xl gap-2">
         <div className="flex items-center gap-2">
           <Button onClick={() => setCurrent(new Date(year, month - 1, 1))} className="bg-slate-700">←</Button>
@@ -231,7 +247,7 @@ export default function SoccerCalendarApp() {
         <button onClick={() => setCurrent(new Date(today.getFullYear(), today.getMonth(), 1))} className="text-xs font-bold bg-white text-slate-600 px-4 py-2 rounded-lg shadow-sm border border-slate-200">今日を表示</button>
       </div>
 
-      {/* 2. カレンダー本体 */}
+      {/* 2. カレンダー */}
       <div className="grid grid-cols-7 gap-1 mb-8">
         {["日", "月", "火", "水", "木", "金", "土"].map((d, i) => (
           <div key={d} className={`text-[10px] font-bold text-center pb-1 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{d}</div>
@@ -302,7 +318,7 @@ export default function SoccerCalendarApp() {
         </div>
       </Card>
 
-      {/* 4. 管理設定ツール（ページ下部へ移動） */}
+      {/* 4. 管理設定ツール */}
       <div className="mt-16 pt-8 border-t-2 border-slate-100">
         <h3 className="text-center font-black text-slate-300 text-[10px] tracking-widest mb-6 uppercase">Admin Settings</h3>
         <div className="p-6 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
@@ -310,12 +326,16 @@ export default function SoccerCalendarApp() {
             <div className="w-full max-w-xs text-center">
               <label className="block text-xs font-bold text-slate-500 mb-2">📅 練習計画CSVの取り込み</label>
               <input type="file" accept=".csv, text/csv, application/vnd.ms-excel" onChange={handleCsvUpload} disabled={isImporting} className="text-xs w-full block bg-white p-3 rounded-xl border border-slate-200 shadow-sm" />
-              <p className="text-[9px] text-slate-400 mt-2">※指定形式のCSVから一括でカレンダーを生成します</p>
             </div>
-            <div className="h-px w-20 bg-slate-200"></div>
-            <button onClick={clearAllData} className="text-xs font-bold text-red-500 bg-white border border-red-100 px-6 py-3 rounded-full shadow-sm active:bg-red-50 transition">
-              🔥 保存されている全データを消去
-            </button>
+            
+            <div className="flex flex-col gap-3 w-full max-w-xs">
+              <button onClick={deleteMonthData} className="text-xs font-bold text-orange-600 bg-white border border-orange-100 px-6 py-3 rounded-xl shadow-sm active:bg-orange-50 transition">
+                🗑️ {month + 1}月のデータのみ削除
+              </button>
+              <button onClick={clearAllData} className="text-xs font-bold text-red-500 bg-white border border-red-100 px-6 py-3 rounded-xl shadow-sm active:bg-red-50 transition">
+                🔥 全データを一括消去
+              </button>
+            </div>
           </div>
         </div>
       </div>
