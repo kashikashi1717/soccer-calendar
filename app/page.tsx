@@ -43,8 +43,7 @@ const Select = ({ value, onChange, options, className = "" }: any) => (
 );
 
 export default function SoccerCalendarApp() {
-  const today = new Date();
-  const [current, setCurrent] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+  const [current, setCurrent] = useState(new Date());
   const [games, setGames] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -59,6 +58,18 @@ export default function SoccerCalendarApp() {
   const [opponent, setOpponent] = useState("");
   const [isOff, setIsOff] = useState(false); 
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
+
+  // 日本時間での「今日」の文字列を取得 (YYYY-MM-DD)
+  const getJSTDateString = (date: Date) => {
+    return new Intl.DateTimeFormat('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: 'Asia/Tokyo'
+    }).format(date).replace(/\//g, '-');
+  };
+
+  const todayStr = getJSTDateString(new Date());
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "games"), (snapshot) => {
@@ -197,8 +208,6 @@ export default function SoccerCalendarApp() {
     return acc;
   }, {});
 
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-
   const cells = [];
   for (let i = 0; i < firstDay; i++) cells.push(<div key={`empty-${i}`} />);
   for (let d = 1; d <= daysInMonth; d++) {
@@ -254,7 +263,7 @@ export default function SoccerCalendarApp() {
            <div className="text-[10px] font-bold text-red-500 flex items-center gap-1 bg-white px-2 py-1 rounded-md border border-red-100">
              <span className="w-2 h-2 rounded-full bg-red-500"></span> 親の休み
            </div>
-           <button onClick={() => setCurrent(new Date(today.getFullYear(), today.getMonth(), 1))} className="text-xs font-bold bg-white text-slate-600 px-4 py-2 rounded-lg border border-slate-200 shadow-sm active:bg-slate-50">今日</button>
+           <button onClick={() => setCurrent(new Date())} className="text-xs font-bold bg-white text-slate-600 px-4 py-2 rounded-lg border border-slate-200 shadow-sm active:bg-slate-50">今日</button>
         </div>
       </div>
 
