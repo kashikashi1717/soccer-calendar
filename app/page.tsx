@@ -57,7 +57,7 @@ export default function SoccerCalendarApp() {
   const [type, setType] = useState("0");
   const [location, setLocation] = useState("");
   const [opponent, setOpponent] = useState("");
-  const [isOff, setIsOff] = useState(false); // 「休みの日」フラグ
+  const [isOff, setIsOff] = useState(false); 
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -137,7 +137,7 @@ export default function SoccerCalendarApp() {
             type: cfg.typeId, 
             location: loc || "未定", 
             opponent: content || "", 
-            isOff: false, // デフォルトは休みなし
+            isOff: false, 
             memo: pType 
           });
           count++;
@@ -205,19 +205,17 @@ export default function SoccerCalendarApp() {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dayGames = (gamesByDate[dateStr] || []).sort((a: any, b: any) => a.time.localeCompare(b.time));
     const isToday = dateStr === todayStr;
-    const hasOff = dayGames.some((g: any) => g.isOff); // 休み判定に変更
+    const hasOff = dayGames.some((g: any) => g.isOff); 
 
     cells.push(
       <Card 
         key={d} 
         onClick={() => setSelectedDate(dateStr)} 
         className={`p-1 min-h-[100px] cursor-pointer hover:bg-slate-50 transition-colors relative
-          ${dayGames.length > 0 ? 'bg-blue-50/10' : ''} 
-          ${isToday ? 'bg-yellow-50 ring-2 ring-yellow-200 border-yellow-200' : ''}`}
+          ${isToday ? 'bg-yellow-50 ring-4 ring-yellow-400 border-yellow-400 z-10' : dayGames.length > 0 ? 'bg-blue-50/10' : ''}`}
       >
         <div className="flex justify-between items-start mb-1">
-          <div className={`text-[10px] font-bold ${isToday ? 'text-yellow-700' : 'opacity-40'}`}>{d}</div>
-          {/* 休みの日を赤丸で表示 */}
+          <div className={`text-[10px] font-bold ${isToday ? 'text-yellow-700 bg-yellow-200 px-1 rounded' : 'opacity-40'}`}>{d}</div>
           {hasOff && (
              <div className="absolute top-1 right-1 w-5 h-5 border-2 border-red-500 rounded-full flex items-center justify-center">
                 <div className="w-2 h-2 bg-red-500 rounded-full"></div>
@@ -256,7 +254,7 @@ export default function SoccerCalendarApp() {
            <div className="text-[10px] font-bold text-red-500 flex items-center gap-1 bg-white px-2 py-1 rounded-md border border-red-100">
              <span className="w-2 h-2 rounded-full bg-red-500"></span> 親の休み
            </div>
-           <button onClick={() => setCurrent(new Date(today.getFullYear(), today.getMonth(), 1))} className="text-xs font-bold bg-white text-slate-600 px-4 py-2 rounded-lg border border-slate-200">今日</button>
+           <button onClick={() => setCurrent(new Date(today.getFullYear(), today.getMonth(), 1))} className="text-xs font-bold bg-white text-slate-600 px-4 py-2 rounded-lg border border-slate-200 shadow-sm active:bg-slate-50">今日</button>
         </div>
       </div>
 
@@ -267,14 +265,14 @@ export default function SoccerCalendarApp() {
         {cells}
       </div>
 
-      <Card className={`p-4 md:p-6 border-none relative z-10 transition-colors mb-12 ${editingGameId ? 'bg-blue-50 ring-2 ring-blue-500' : 'bg-slate-50'}`}>
+      <Card className={`p-4 md:p-6 border-none relative z-10 transition-colors mb-12 ${editingGameId ? 'bg-blue-50 ring-2 ring-blue-500 shadow-lg' : 'bg-slate-50'}`}>
         <div className="flex justify-between items-center mb-6">
           <h3 className="font-black text-slate-400 text-[10px] tracking-widest uppercase">
             {editingGameId ? "Edit Schedule" : "New Schedule"}
           </h3>
-          <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">
+          <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm hover:bg-slate-50 transition">
              <span className="text-[10px] font-bold text-slate-500">親の休みの日として設定</span>
-             <input type="checkbox" checked={isOff} onChange={(e) => setIsOff(e.target.checked)} className="w-4 h-4 accent-red-500" />
+             <input type="checkbox" checked={isOff} onChange={(e) => setIsOff(e.target.checked)} className="w-4 h-4 accent-red-500 cursor-pointer" />
           </label>
         </div>
 
@@ -314,8 +312,8 @@ export default function SoccerCalendarApp() {
             <div>
               <label className="text-[10px] font-bold text-slate-400 ml-1">場所</label>
               <div className="flex gap-2 mb-2">
-                <button onClick={() => setLocation("1G")} className="flex-1 py-2 text-xs font-bold bg-white border border-slate-300 rounded-lg">1G</button>
-                <button onClick={() => setLocation("2G")} className="flex-1 py-2 text-xs font-bold bg-white border border-slate-300 rounded-lg">2G</button>
+                <button onClick={() => setLocation("1G")} className="flex-1 py-2 text-xs font-bold bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition">1G</button>
+                <button onClick={() => setLocation("2G")} className="flex-1 py-2 text-xs font-bold bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition">2G</button>
               </div>
               <Input placeholder="場所を自由入力" value={location} onChange={(e:any) => setLocation(e.target.value)} />
             </div>
@@ -326,10 +324,10 @@ export default function SoccerCalendarApp() {
           </div>
           
           <div className="flex gap-2">
-            <Button onClick={saveGame} className={`flex-1 py-4 rounded-2xl shadow-lg mt-2 ${editingGameId ? 'bg-green-600' : ''}`}>
+            <Button onClick={saveGame} className={`flex-1 py-4 rounded-2xl shadow-lg mt-2 ${editingGameId ? 'bg-green-600 hover:bg-green-700' : ''}`}>
               {editingGameId ? "変更を保存する" : "予定を登録する"}
             </Button>
-            {editingGameId && <button onClick={resetForm} className="mt-2 px-4 text-xs font-bold text-slate-400">キャンセル</button>}
+            {editingGameId && <button onClick={resetForm} className="mt-2 px-4 text-xs font-bold text-slate-400 hover:text-slate-600">キャンセル</button>}
           </div>
         </div>
       </Card>
@@ -340,11 +338,17 @@ export default function SoccerCalendarApp() {
           <div className="flex flex-col items-center space-y-6">
             <div className="w-full max-w-xs text-center">
               <label className="block text-xs font-bold text-slate-500 mb-2">📅 スケジュールCSV取り込み</label>
-              <input type="file" accept=".csv" onChange={handleCsvUpload} disabled={isImporting} className="text-xs w-full bg-white p-3 rounded-xl border border-slate-200" />
+              <input 
+                type="file" 
+                accept=".csv, text/csv, application/vnd.ms-excel" 
+                onChange={handleCsvUpload} 
+                disabled={isImporting} 
+                className="text-xs w-full bg-white p-3 rounded-xl border border-slate-200 cursor-pointer" 
+              />
             </div>
             <div className="flex flex-col gap-3 w-full max-w-xs">
-              <button onClick={deleteMonthData} className="text-xs font-bold text-orange-600 bg-white border border-orange-100 px-6 py-3 rounded-xl">🗑️ {month + 1}月のデータ削除</button>
-              <button onClick={clearAllData} className="text-xs font-bold text-red-500 bg-white border border-red-100 px-6 py-3 rounded-xl">🔥 全データ削除</button>
+              <button onClick={deleteMonthData} className="text-xs font-bold text-orange-600 bg-white border border-orange-100 px-6 py-3 rounded-xl shadow-sm hover:bg-orange-50 transition">🗑️ {month + 1}月のデータ削除</button>
+              <button onClick={clearAllData} className="text-xs font-bold text-red-500 bg-white border border-red-100 px-6 py-3 rounded-xl shadow-sm hover:bg-red-50 transition">🔥 全データ削除</button>
             </div>
           </div>
         </div>
@@ -356,10 +360,10 @@ export default function SoccerCalendarApp() {
             <div className="flex justify-between items-center mb-4 border-b pb-2">
                <h3 className="text-xl font-black">{selectedDate.replace(/-/g, "/")}</h3>
                {gamesByDate[selectedDate]?.some((g:any)=>g.isOff) && (
-                 <span className="text-[10px] font-bold bg-red-500 text-white px-3 py-1 rounded-full">休みの日</span>
+                 <span className="text-[10px] font-bold bg-red-500 text-white px-3 py-1 rounded-full shadow-sm">休みの日</span>
                )}
             </div>
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
               {(gamesByDate[selectedDate] || []).map((g: any) => {
                 const cfg = getTypeConfig(g.type);
                 return (
@@ -371,8 +375,8 @@ export default function SoccerCalendarApp() {
                       <div className="bg-slate-100 p-3 rounded-xl border-l-4 border-blue-500 text-slate-700 font-black">{g.opponent}</div>
                     )}
                     <div className="flex gap-6 mt-4 pt-3 border-t border-slate-100">
-                      <button onClick={() => startEdit(g)} className="text-blue-500 text-xs font-bold">✏️ 編集</button>
-                      <button onClick={() => { if(confirm("削除？")) deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); }} className="text-red-400 text-xs font-bold">🗑️ 削除</button>
+                      <button onClick={() => startEdit(g)} className="text-blue-500 text-xs font-bold flex items-center gap-1 hover:underline"><span>✏️</span> 編集</button>
+                      <button onClick={() => { if(confirm("削除しますか？")) deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); }} className="text-red-400 text-xs font-bold flex items-center gap-1 hover:underline"><span>🗑️</span> 削除</button>
                     </div>
                   </div>
                 );
