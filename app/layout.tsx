@@ -12,9 +12,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Soccer Schedule",
-  description: "練習スケジュール管理アプリ",
+export const metadata = {
+  title: "西高サッカーカレンダー",
+  description: "西高部活予定管理アプリ",
+  // ここを追加
+  icons: {
+    icon: "/favicon.ico", // 通常のファビコン
+    apple: "/icon.png",   // ← スマホのホーム画面用（高画質）
+  },
 };
 
 export default function RootLayout({
