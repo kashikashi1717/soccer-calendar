@@ -43,7 +43,14 @@ const Select = ({ value, onChange, options, className = "" }: any) => (
 );
 
 export default function SoccerCalendarApp() {
-  const [current, setCurrent] = useState(new Date());
+  // 日本時間(JST)を基準にした初期化
+  const getJSTDate = () => {
+    const now = new Date();
+    return new Date(now.getTime() + (9 * 60 * 60 * 1000));
+  };
+
+  const jstNow = getJSTDate();
+  const [current, setCurrent] = useState(new Date(jstNow.getUTCFullYear(), jstNow.getUTCMonth(), 1));
   const [games, setGames] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -59,17 +66,16 @@ export default function SoccerCalendarApp() {
   const [isOff, setIsOff] = useState(false); 
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
 
-  // 日本時間での「今日」の文字列を取得 (YYYY-MM-DD)
-  const getJSTDateString = (date: Date) => {
-    return new Intl.DateTimeFormat('ja-JP', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      timeZone: 'Asia/Tokyo'
-    }).format(date).replace(/\//g, '-');
+  // 日本時間の「今日」を YYYY-MM-DD 形式で取得
+  const getTodayStr = () => {
+    const d = getJSTDate();
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const date = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${date}`;
   };
 
-  const todayStr = getJSTDateString(new Date());
+  const todayStr = getTodayStr();
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "games"), (snapshot) => {
@@ -213,6 +219,8 @@ export default function SoccerCalendarApp() {
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dayGames = (gamesByDate[dateStr] || []).sort((a: any, b: any) => a.time.localeCompare(b.time));
+    
+    // 【修正】確実に日本時間で今日を判定
     const isToday = dateStr === todayStr;
     const hasOff = dayGames.some((g: any) => g.isOff); 
 
@@ -224,7 +232,9 @@ export default function SoccerCalendarApp() {
           ${isToday ? 'bg-yellow-50 ring-4 ring-yellow-400 border-yellow-400 z-10' : dayGames.length > 0 ? 'bg-blue-50/10' : ''}`}
       >
         <div className="flex justify-between items-start mb-1">
-          <div className={`text-[10px] font-bold ${isToday ? 'text-yellow-700 bg-yellow-200 px-1 rounded' : 'opacity-40'}`}>{d}</div>
+          <div className={`text-[10px] font-bold ${isToday ? 'text-yellow-700 bg-yellow-200 px-1 rounded' : 'opacity-40'}`}>
+            {d}{isToday && <span className="ml-1 text-[8px]">今日</span>}
+          </div>
           {hasOff && (
              <div className="absolute top-1 right-1 w-5 h-5 border-2 border-red-500 rounded-full flex items-center justify-center">
                 <div className="w-2 h-2 bg-red-500 rounded-full"></div>
@@ -263,7 +273,11 @@ export default function SoccerCalendarApp() {
            <div className="text-[10px] font-bold text-red-500 flex items-center gap-1 bg-white px-2 py-1 rounded-md border border-red-100">
              <span className="w-2 h-2 rounded-full bg-red-500"></span> 親の休み
            </div>
-           <button onClick={() => setCurrent(new Date())} className="text-xs font-bold bg-white text-slate-600 px-4 py-2 rounded-lg border border-slate-200 shadow-sm active:bg-slate-50">今日</button>
+           {/* 今日ボタンも日本時間基準に修正 */}
+           <button onClick={() => {
+             const d = getJSTDate();
+             setCurrent(new Date(d.getUTCFullYear(), d.getUTCMonth(), 1));
+           }} className="text-xs font-bold bg-white text-slate-600 px-4 py-2 rounded-lg border border-slate-200 shadow-sm active:bg-slate-50">今日</button>
         </div>
       </div>
 
@@ -341,6 +355,7 @@ export default function SoccerCalendarApp() {
         </div>
       </Card>
 
+      {/* CSVインポートエリア（スマホ対応設定を維持） */}
       <div className="mt-16 pt-8 border-t-2 border-slate-100">
         <h3 className="text-center font-black text-slate-300 text-[10px] tracking-widest mb-6 uppercase">Admin Settings</h3>
         <div className="p-6 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
