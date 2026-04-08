@@ -92,10 +92,9 @@ export default function SoccerCalendarApp() {
 
   const toHalfWidth = (str: string) => str ? str.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)) : "";
 
-  // 【修正】全削除でも「休み」は残す
   const clearAllData = async () => {
     const targetGames = games.filter(g => !g.isOff);
-    if (targetGames.length === 0) return alert("削除する予定はありません（休み設定は保護されています）");
+    if (targetGames.length === 0) return alert("削除する予定はありません");
     if (confirm(`休み設定以外の全 ${targetGames.length} 件を削除しますか？`)) {
       const batch = writeBatch(db);
       targetGames.forEach((game) => batch.delete(doc(db, "games", game.id)));
@@ -103,13 +102,11 @@ export default function SoccerCalendarApp() {
     }
   };
 
-  // 【修正】月の削除でも「休み」は残す
   const deleteMonthData = async () => {
     const targetYearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
     const targetGames = games.filter(g => g.date && g.date.startsWith(targetYearMonth) && !g.isOff);
-    
-    if (targetGames.length === 0) return alert("この月の削除できる予定はありません（休み設定は保護されています）");
-    if (confirm(`${month + 1}月の予定 ${targetGames.length}件 を削除しますか？\n※「親の休み」は削除されません。`)) {
+    if (targetGames.length === 0) return alert("この月の削除できる予定はありません");
+    if (confirm(`${month + 1}月の予定 ${targetGames.length}件 を削除しますか？`)) {
       const batch = writeBatch(db);
       targetGames.forEach((game) => batch.delete(doc(db, "games", game.id)));
       await batch.commit();
@@ -148,7 +145,7 @@ export default function SoccerCalendarApp() {
           const dateStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${dStr.padStart(2, '0')}`;
           const timeFull = toHalfWidth(tRange || "未定");
           const cfg = getTypeConfig(pType);
-          const customId = `${dateStr}_${timeFull.replace(/[:～\-\s]/g, '')}_${loc}`;
+          const customId = `CSV_${dateStr}_${timeFull.replace(/[:～\-\s]/g, '')}_${loc}`;
           
           batch.set(doc(db, "games", customId), { 
             date: dateStr, 
@@ -172,14 +169,19 @@ export default function SoccerCalendarApp() {
   };
 
   const saveGame = async () => {
-    if (!inputDate || (!isOff && !location)) return alert("日付と場所を入力してください");
+    // 【修正】休み設定の場合はバリデーションを回避
+    if (!inputDate) return alert("日付を選択してください");
+    if (!isOff && !location) return alert("場所を入力してください");
+
     const timeFull = isOff ? "00:00～00:01" : `${startH}:${startM}～${endH}:${endM}`;
     try {
       if (editingGameId) {
         await updateDoc(doc(db, "games", editingGameId), { date: inputDate, time: timeFull, type, location, opponent, isOff });
       } else {
-        const customId = isOff ? `${inputDate}_OFF` : `${inputDate}_${startH}${startM}${endH}${endM}_${location}`;
-        await setDoc(doc(db, "games", customId), { date: inputDate, time: timeFull, type, location, opponent, isOff, memo: "" });
+        // 【修正】休み設定(OFF)でも既存の予定を上書きしないよう、ランダムなIDを使用
+        const randomStr = Math.random().toString(36).substring(2, 7);
+        const customId = isOff ? `OFF_${inputDate}_${randomStr}` : `MANUAL_${inputDate}_${startH}${startM}${randomStr}`;
+        await setDoc(doc(db, "games", customId), { date: inputDate, time: timeFull, type, location: location || "", opponent, isOff, memo: "" });
       }
       resetForm();
     } catch (e: any) { alert(e.message); }
@@ -190,15 +192,15 @@ export default function SoccerCalendarApp() {
   };
 
   const startEdit = (g: any) => {
-    const [start, end] = g.time.split("～");
+    const [start, end] = (g.time || "00:00～00:00").split("～");
     const [sh, sm] = (start || "00:00").split(":");
     const [eh, em] = (end || "00:00").split(":");
     setEditingGameId(g.id);
     setInputDate(g.date);
-    setStartH(sh); setStartM(sm);
-    setEndH(eh); setEndM(em);
-    setType(g.type);
-    setLocation(g.location);
+    setStartH(sh || "00"); setStartM(sm || "00");
+    setEndH(eh || "00"); setEndM(em || "00");
+    setType(g.type || "0");
+    setLocation(g.location || "");
     setOpponent(g.opponent || "");
     setIsOff(g.isOff || false);
     setSelectedDate(null);
@@ -221,7 +223,6 @@ export default function SoccerCalendarApp() {
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dayData = (gamesByDate[dateStr] || []);
-    // 休み設定を除いた「試合/練習」のリスト
     const dayGames = dayData.filter((g: any) => !g.isOff).sort((a: any, b: any) => a.time.localeCompare(b.time));
     const isToday = dateStr === todayStr;
     const hasOff = dayData.some((g: any) => g.isOff); 
@@ -289,7 +290,7 @@ export default function SoccerCalendarApp() {
         {cells}
       </div>
 
-      <Card className={`p-4 md:p-6 border-none relative z-10 transition-colors mb-12 ${editingGameId ? 'bg-blue-50 ring-2 ring-blue-500 shadow-lg' : 'bg-slate-50'}`}>
+      <Card id="input-form" className={`p-4 md:p-6 border-none relative z-10 transition-colors mb-12 ${editingGameId ? 'bg-blue-50 ring-2 ring-blue-500 shadow-lg' : 'bg-slate-50'}`}>
         <div className="flex justify-between items-center mb-6">
           <h3 className="font-black text-slate-400 text-[10px] tracking-widest uppercase">
             {editingGameId ? "Edit Schedule" : "New Schedule"}
@@ -317,28 +318,32 @@ export default function SoccerCalendarApp() {
             </div>
           </div>
 
-          <div>
-            <label className="text-[10px] font-bold text-slate-400 ml-1">時間</label>
-            <div className={`flex flex-wrap items-center gap-1 bg-white p-2 rounded-xl border border-slate-300 ${isOff ? 'opacity-30 pointer-events-none' : ''}`}>
-              <div className="flex items-center flex-1 gap-1">
-                <Select value={startH} onChange={setStartH} options={hOpts} />
-                <Select value={startM} onChange={setStartM} options={mOpts} />
-              </div>
-              <span className="text-[10px] font-bold text-slate-300 px-1">～</span>
-              <div className="flex items-center flex-1 gap-1">
-                <Select value={endH} onChange={setEndH} options={hOpts} />
-                <Select value={endM} onChange={setEndM} options={mOpts} />
+          {!isOff && (
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 ml-1">時間</label>
+              <div className="flex flex-wrap items-center gap-1 bg-white p-2 rounded-xl border border-slate-300">
+                <div className="flex items-center flex-1 gap-1">
+                  <Select value={startH} onChange={setStartH} options={hOpts} />
+                  <Select value={startM} onChange={setStartM} options={mOpts} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-300 px-1">～</span>
+                <div className="flex items-center flex-1 gap-1">
+                  <Select value={endH} onChange={setEndH} options={hOpts} />
+                  <Select value={endM} onChange={setEndM} options={mOpts} />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] font-bold text-slate-400 ml-1">場所</label>
-              <div className="flex gap-2 mb-2">
-                <button disabled={isOff} onClick={() => setLocation("1G")} className="flex-1 py-2 text-xs font-bold bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition disabled:opacity-30">1G</button>
-                <button disabled={isOff} onClick={() => setLocation("2G")} className="flex-1 py-2 text-xs font-bold bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition disabled:opacity-30">2G</button>
-              </div>
+              {!isOff && (
+                <div className="flex gap-2 mb-2">
+                  <button onClick={() => setLocation("1G")} className="flex-1 py-2 text-xs font-bold bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition">1G</button>
+                  <button onClick={() => setLocation("2G")} className="flex-1 py-2 text-xs font-bold bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition">2G</button>
+                </div>
+              )}
               <Input disabled={isOff} placeholder={isOff ? "休み設定中" : "場所を自由入力"} value={location} onChange={(e:any) => setLocation(e.target.value)} />
             </div>
             <div>
@@ -372,7 +377,7 @@ export default function SoccerCalendarApp() {
             </div>
             <div className="flex flex-col gap-3 w-full max-w-xs">
               <button onClick={deleteMonthData} className="text-xs font-bold text-orange-600 bg-white border border-orange-100 px-6 py-3 rounded-xl shadow-sm hover:bg-orange-50 transition">🗑️ {month + 1}月の予定のみ削除</button>
-              <button onClick={clearAllData} className="text-xs font-bold text-red-500 bg-white border border-red-100 px-6 py-3 rounded-xl shadow-sm hover:bg-red-50 transition">🔥 全予定を削除（休みは残す）</button>
+              <button onClick={clearAllData} className="text-xs font-bold text-red-500 bg-white border border-red-100 px-6 py-3 rounded-xl shadow-sm hover:bg-red-50 transition">🔥 全予定を削除</button>
             </div>
           </div>
         </div>
@@ -385,13 +390,15 @@ export default function SoccerCalendarApp() {
                <h3 className="text-xl font-black">{selectedDate.replace(/-/g, "/")}</h3>
             </div>
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-              {(gamesByDate[selectedDate] || []).map((g: any) => {
+              {(gamesByDate[selectedDate] || []).sort((a:any,b:any)=> (a.isOff?1:0) - (b.isOff?1:0)).map((g: any) => {
                 const cfg = getTypeConfig(g.type);
                 if (g.isOff) {
                   return (
                     <div key={g.id} className="p-4 bg-red-50 rounded-2xl border-2 border-red-100 flex justify-between items-center">
-                      <span className="font-black text-red-600">🛑 親の休み設定</span>
-                      <button onClick={() => { if(confirm("休み設定を削除しますか？")) deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); }} className="text-red-400 text-xs font-bold">削除</button>
+                      <span className="font-black text-red-600 flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full bg-red-500"></span> 親の休み設定
+                      </span>
+                      <button onClick={async () => { if(confirm("休み設定を削除しますか？")) { await deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); } }} className="text-red-400 text-xs font-bold">削除</button>
                     </div>
                   );
                 }
@@ -405,7 +412,7 @@ export default function SoccerCalendarApp() {
                     )}
                     <div className="flex gap-6 mt-4 pt-3 border-t border-slate-100">
                       <button onClick={() => startEdit(g)} className="text-blue-500 text-xs font-bold flex items-center gap-1 hover:underline"><span>✏️</span> 編集</button>
-                      <button onClick={() => { if(confirm("削除しますか？")) deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); }} className="text-red-400 text-xs font-bold flex items-center gap-1 hover:underline"><span>🗑️</span> 削除</button>
+                      <button onClick={async () => { if(confirm("予定を削除しますか？")) { await deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); } }} className="text-red-400 text-xs font-bold flex items-center gap-1 hover:underline"><span>🗑️</span> 削除</button>
                     </div>
                   </div>
                 );
