@@ -91,7 +91,7 @@ export default function SoccerCalendarApp() {
     return { label: "他", full: "他試合", color: "bg-orange-500", typeId: "3" };
   };
 
-  // --- スプレッドシート同期（API・表示月のタブを検索） ---
+  // --- スプレッドシート同期（半角・全角の数字に対応） ---
   const syncWithSpreadsheet = async () => {
     if (API_KEY.includes("貼り付け")) return alert("APIキーを設定してください");
     
@@ -106,12 +106,22 @@ export default function SoccerCalendarApp() {
       const metaData = await metaRes.json();
       if (!metaData.sheets) throw new Error("スプレッドシートの情報が取得できませんでした。");
 
-      // 2. 表示中の「月」と一致するタブを厳密に検索
+      // 2. 表示中の「月」と一致するタブを検索（半角・全角両対応）
       const allSheetTitles = metaData.sheets.map((s: any) => s.properties.title);
+      
       const matchedSheetName = allSheetTitles.find((title: string) => {
-        // 正規表現：他の数字が前に来ない「数字+月」を探す
-        const monthPattern = new RegExp(`(^|[^0-9])${targetMonth}月`);
+        // 全角数字に変換した月（例: 4 -> ４）
+        const fullWidthMonth = String(targetMonth).replace(/[0-9]/g, (s) => String.fromCharCode(s.charCodeAt(0) + 0xFEE0));
+        
+        // 正規表現： (半角月 または 全角月) + "月"
+        // 前後に他の数字がないことを確認（1月を探す時に11月に反応しないようにする）
+        const monthPattern = new RegExp(`(^|[^0-9０-９])(${targetMonth}|${fullWidthMonth})月`);
         return title.match(monthPattern);
+      }) || allSheetTitles.find((title: string) => {
+        // 「月」が付いていない数字だけのタブ（4 や ４）への対応
+        const fullWidthMonth = String(targetMonth).replace(/[0-9]/g, (s) => String.fromCharCode(s.charCodeAt(0) + 0xFEE0));
+        const numOnlyPattern = new RegExp(`^(${targetMonth}|${fullWidthMonth})$`);
+        return title.match(numOnlyPattern);
       });
 
       if (!matchedSheetName) {
