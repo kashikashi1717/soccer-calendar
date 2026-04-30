@@ -68,9 +68,12 @@ export default function SoccerCalendarApp() {
   const [isOff, setIsOff] = useState(false); 
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
 
-  const todayStr = (() => {
+  const year = current.getFullYear();
+  const month = current.getMonth();
+
+  const todayStrTodayFunction: string = (() => {
     const d = getJSTDate();
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+    return `${d.getUTCFullYear()}-${String(d.getUTCFullYear())}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
   })();
 
   useEffect(() => {
@@ -196,8 +199,6 @@ export default function SoccerCalendarApp() {
     document.getElementById("input-form")?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const year = current.getFullYear();
-  const month = current.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
   const gamesByDate = games.reduce((acc: any, g: any) => {
@@ -213,13 +214,12 @@ export default function SoccerCalendarApp() {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dayData = (gamesByDate[dateStr] || []);
     const dayGames = dayData.filter((g: any) => !g.isOff).sort((a: any, b: any) => a.time.localeCompare(b.time));
-    const isToday = dateStr === todayStr; /* 修正: 文字列結合を修正 */
     const hasOff = dayData.some((g: any) => g.isOff); 
     
     cells.push(
-      <Card key={d} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[90px] cursor-pointer hover:bg-slate-50 relative ${dateStr === todayStr ? 'bg-yellow-50 ring-2 ring-yellow-400' : ''}`}>
+      <Card key={d} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[90px] cursor-pointer hover:bg-slate-50 relative ${new Date(dateStr).toDateString() === new Date().toDateString() ? 'bg-yellow-50 ring-2 ring-yellow-400' : ''}`}>
         <div className="flex justify-between items-start">
-          <span className={`text-[10px] font-bold ${dateStr === todayStr ? 'text-yellow-700' : 'text-slate-400'}`}>{d}</span>
+          <span className={`text-[10px] font-bold ${new Date(dateStr).toDateString() === new Date().toDateString() ? 'text-yellow-700' : 'text-slate-400'}`}>{d}</span>
           {hasOff && <div className="w-4 h-4 border-2 border-red-500 rounded-full flex items-center justify-center"><div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div></div>}
         </div>
         <div className="mt-1 space-y-0.5">
