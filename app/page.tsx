@@ -67,6 +67,7 @@ export default function SoccerCalendarApp() {
   const [location, setLocation] = useState("");
   const [opponent, setOpponent] = useState("");
   const [isOff, setIsOff] = useState(false); 
+  const [editingGameId, setGameId] = useState<string | null>(null);
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
 
   const todayStr = (() => {
@@ -91,7 +92,7 @@ export default function SoccerCalendarApp() {
     return { label: "他", full: "他試合", color: "bg-orange-500", typeId: "3" };
   };
 
-  // --- スプレッドシート同期（半角・全角の数字に対応） ---
+  // --- スプレッドシート同期（確認メッセージなし） ---
   const syncWithSpreadsheet = async () => {
     if (API_KEY.includes("貼り付け")) return alert("APIキーを設定してください");
     
@@ -110,15 +111,10 @@ export default function SoccerCalendarApp() {
       const allSheetTitles = metaData.sheets.map((s: any) => s.properties.title);
       
       const matchedSheetName = allSheetTitles.find((title: string) => {
-        // 全角数字に変換した月（例: 4 -> ４）
         const fullWidthMonth = String(targetMonth).replace(/[0-9]/g, (s) => String.fromCharCode(s.charCodeAt(0) + 0xFEE0));
-        
-        // 正規表現： (半角月 または 全角月) + "月"
-        // 前後に他の数字がないことを確認（1月を探す時に11月に反応しないようにする）
         const monthPattern = new RegExp(`(^|[^0-9０-９])(${targetMonth}|${fullWidthMonth})月`);
         return title.match(monthPattern);
       }) || allSheetTitles.find((title: string) => {
-        // 「月」が付いていない数字だけのタブ（4 や ４）への対応
         const fullWidthMonth = String(targetMonth).replace(/[0-9]/g, (s) => String.fromCharCode(s.charCodeAt(0) + 0xFEE0));
         const numOnlyPattern = new RegExp(`^(${targetMonth}|${fullWidthMonth})$`);
         return title.match(numOnlyPattern);
@@ -145,8 +141,6 @@ export default function SoccerCalendarApp() {
       }
       if (headerIdx === -1) throw new Error(`${matchedSheetName} 内に「日、曜日、種別」の列が見つかりません。`);
 
-      if (!confirm(`タブ「${matchedSheetName}」から ${targetMonth}月の予定を同期しますか？\n（親の休みは保持されます）`)) return;
-
       const batch = writeBatch(db);
       const targetYearMonth = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
 
@@ -155,7 +149,6 @@ export default function SoccerCalendarApp() {
       existingDocs.forEach(d => batch.delete(doc(db, "games", d.id)));
 
       // 5. 書き込み処理
-      let count = 0;
       for (let i = headerIdx + 1; i < rows.length; i++) {
         const row = rows[i];
         const dStr = toHalfWidth(row[0] || "");
@@ -167,7 +160,7 @@ export default function SoccerCalendarApp() {
         const dateStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${dStr.padStart(2, '0')}`;
         const timeFull = toHalfWidth(row[5] || "未定");
         const cfg = getTypeConfig(pType);
-        const customId = `API_${dateStr}_${count}`;
+        const customId = `API_${dateStr}_${i}`;
         
         batch.set(doc(db, "games", customId), {
           date: dateStr,
@@ -178,11 +171,10 @@ export default function SoccerCalendarApp() {
           isOff: false,
           memo: `タブ [${matchedSheetName}] より同期`
         });
-        count++;
       }
 
       await batch.commit();
-      alert(`同期完了：${matchedSheetName} から ${count} 件取り込みました。`);
+      // 成功時のアラートやメッセージを排除しました
     } catch (err: any) {
       alert("同期エラー: " + err.message);
     } finally {
