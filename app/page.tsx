@@ -14,7 +14,7 @@ const firebaseConfig = {
   appId: "1:749909916331:web:bf3b7b79e4586be97215ee"
 };
 
-// ★Google Cloud Consoleで取得したAPIキーを入力してください
+// ★Google Cloud Consoleで取得したAPIキーを入力してください 
 const API_KEY = "AIzaSyDfUgp9d4QsdZT-YkxRl1EVNpPnv-6TA50";
 const SPREADSHEET_ID = "1E6IUcTVV7tzx1A2aLFoZvVuP8hKTyVoSIGmXFqD-Des";
 
