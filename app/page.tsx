@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, onSnapshot, deleteDoc, doc, writeBatch, setDoc, updateDoc } from "firebase/firestore";
 
-// --- Firebase設定 ---
+// --- 設定エリア ---
 const firebaseConfig = {
   apiKey: "AIzaSyDD3RYBSQXwpdwEapRVG4awowYVzsfKzeI",
   authDomain: "soccer-calendar-8fa1b.firebaseapp.com",
@@ -13,6 +13,11 @@ const firebaseConfig = {
   messagingSenderId: "749909916331",
   appId: "1:749909916331:web:bf3b7b79e4586be97215ee"
 };
+
+// ★ここに取得したAPIキーを入力してください
+const API_KEY = "AIzaSyDfUgp9d4QsdZT-YkxRl1EVNpPnv-6TA50";
+const SPREADSHEET_ID = "1E6IUcTVV7tzx1A2aLFoZvVuP8hKTyVoSIGmXFqD-Des";
+const SHEET_NAME = "シート1"; 
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -33,7 +38,7 @@ const Button = ({ children, onClick, className = "", disabled = false }: any) =>
 );
 
 const Input = (props: any) => (
-  <input {...props} className="w-full border border-gray-300 rounded-xl p-3 text-slate-900 bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+  <input {...props} className="w-full border border-gray-200 rounded-xl p-3 text-slate-900 bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
 );
 
 const Select = ({ value, onChange, options, className = "" }: any) => (
@@ -52,7 +57,7 @@ export default function SoccerCalendarApp() {
   const [current, setCurrent] = useState(new Date(jstNow.getUTCFullYear(), jstNow.getUTCMonth(), 1));
   const [games, setGames] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [isImporting, setIsImporting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const [inputDate, setInputDate] = useState(""); 
   const [startH, setStartH] = useState("16"); 
@@ -65,15 +70,10 @@ export default function SoccerCalendarApp() {
   const [isOff, setIsOff] = useState(false); 
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
 
-  const getTodayStr = () => {
+  const todayStr = (() => {
     const d = getJSTDate();
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const date = String(d.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${date}`;
-  };
-
-  const todayStr = getTodayStr();
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  })();
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "games"), (snapshot) => {
@@ -81,6 +81,8 @@ export default function SoccerCalendarApp() {
     });
     return () => unsubscribe();
   }, []);
+
+  const toHalfWidth = (str: string) => str ? str.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)) : "";
 
   const getTypeConfig = (typeInput: string) => {
     const val = typeInput || "";
@@ -90,98 +92,83 @@ export default function SoccerCalendarApp() {
     return { label: "他", full: "他試合", color: "bg-orange-500", typeId: "3" };
   };
 
-  const toHalfWidth = (str: string) => str ? str.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)) : "";
+  // --- スプレッドシート同期（API版） ---
+  const syncWithSpreadsheet = async () => {
+    if (API_KEY.includes("貼り付け")) return alert("APIキーを設定してください");
+    
+    setIsSyncing(true);
+    try {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}!A1:G100?key=${API_KEY}`;
+      const res = await fetch(url);
+      const data = await res.json();
 
-  const clearAllData = async () => {
-    const targetGames = games.filter(g => !g.isOff);
-    if (targetGames.length === 0) return alert("削除する予定はありません");
-    if (confirm(`休み設定以外の全 ${targetGames.length} 件を削除しますか？`)) {
+      if (!data.values) throw new Error("データの取得に失敗しました。共有設定を確認してください。");
+      const rows = data.values;
+
+      let headerIdx = -1;
+      for (let i = 0; i < Math.min(rows.length, 5); i++) {
+        if (rows[i][0]?.includes("日") && rows[i][3]?.includes("練習")) { headerIdx = i; break; }
+      }
+      if (headerIdx === -1) throw new Error("シートの形式が読み取れません。");
+
+      const firstCell = toHalfWidth(rows[0][0] || "");
+      const monthMatch = firstCell.match(/(\d+)月/);
+      const targetMonth = monthMatch ? parseInt(monthMatch[1]) : (current.getMonth() + 1);
+      const targetYear = firstCell.includes("2027") ? 2027 : 2026;
+      const targetYearMonth = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
+
+      if (!confirm(`${targetMonth}月の予定を同期しますか？\n（既存の予定は上書きされますが、「親の休み」は保持されます）`)) return;
+
       const batch = writeBatch(db);
-      targetGames.forEach((game) => batch.delete(doc(db, "games", game.id)));
+      const existingDocs = games.filter(g => g.date?.startsWith(targetYearMonth) && !g.isOff);
+      existingDocs.forEach(d => batch.delete(doc(db, "games", d.id)));
+
+      let count = 0;
+      for (let i = headerIdx + 1; i < rows.length; i++) {
+        const row = rows[i];
+        const dStr = toHalfWidth(row[0] || "");
+        if (!dStr || isNaN(parseInt(dStr))) continue;
+
+        const pType = row[3];
+        if (!pType || pType === "オフ" || pType === "／") continue;
+
+        const dateStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${dStr.padStart(2, '0')}`;
+        const timeFull = toHalfWidth(row[5] || "未定");
+        const cfg = getTypeConfig(pType);
+        const customId = `API_${dateStr}_${count}`;
+        
+        batch.set(doc(db, "games", customId), {
+          date: dateStr,
+          time: timeFull,
+          type: cfg.typeId,
+          location: row[4] || "未定",
+          opponent: row[6] || "",
+          isOff: false,
+          memo: "API同期"
+        });
+        count++;
+      }
+
       await batch.commit();
+      setCurrent(new Date(targetYear, targetMonth - 1, 1));
+      alert(`${count} 件の予定を同期しました。`);
+    } catch (err: any) {
+      alert("同期エラー: " + err.message);
+    } finally {
+      setIsSyncing(false);
     }
-  };
-
-  const deleteMonthData = async () => {
-    const targetYearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
-    const targetGames = games.filter(g => g.date && g.date.startsWith(targetYearMonth) && !g.isOff);
-    if (targetGames.length === 0) return alert("この月の削除できる予定はありません");
-    if (confirm(`${month + 1}月の予定 ${targetGames.length}件 を削除しますか？`)) {
-      const batch = writeBatch(db);
-      targetGames.forEach((game) => batch.delete(doc(db, "games", game.id)));
-      await batch.commit();
-    }
-  };
-
-  const handleCsvUpload = async (e: any) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setIsImporting(true);
-    const reader = new FileReader();
-    reader.onload = async (event: any) => {
-      try {
-        const text = event.target.result as string;
-        const rows = text.split(/\r?\n/).map(row => row.split(",").map(cell => cell.trim()));
-        let headerIdx = -1;
-        for (let i = 0; i < Math.min(rows.length, 5); i++) {
-          if (rows[i][0]?.includes("日") && (rows[i][3]?.includes("練習") || rows[i][1]?.includes("曜"))) { headerIdx = i; break; }
-        }
-        if (headerIdx === -1) throw new Error("CSV形式エラー");
-
-        const firstRowStr = toHalfWidth(rows[0][0] || "");
-        const monthMatch = firstRowStr.match(/(\d+)月/);
-        const targetMonth = monthMatch ? parseInt(monthMatch[1]) : 0;
-        const targetYear = firstRowStr.includes("2027") ? 2027 : 2026;
-
-        const batch = writeBatch(db);
-        let count = 0;
-        for (let i = headerIdx + 1; i < rows.length; i++) {
-          const row = rows[i];
-          const dStr = toHalfWidth(row[0] || "");
-          if (!dStr || isNaN(parseInt(dStr))) continue;
-          const [day, , , pType, loc, tRange, content] = row;
-          if (pType === "オフ" || !pType || pType === "／") continue;
-
-          const dateStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${dStr.padStart(2, '0')}`;
-          const timeFull = toHalfWidth(tRange || "未定");
-          const cfg = getTypeConfig(pType);
-          const customId = `CSV_${dateStr}_${timeFull.replace(/[:～\-\s]/g, '')}_${loc}`;
-          
-          batch.set(doc(db, "games", customId), { 
-            date: dateStr, 
-            time: timeFull, 
-            type: cfg.typeId, 
-            location: loc || "未定", 
-            opponent: content || "", 
-            isOff: false, 
-            memo: pType 
-          });
-          count++;
-        }
-        if (count > 0 && confirm(`${count}件取り込みますか？`)) {
-          await batch.commit();
-          setCurrent(new Date(targetYear, targetMonth - 1, 1));
-        }
-      } catch (err: any) { alert(err.message); }
-      finally { setIsImporting(false); e.target.value = ""; }
-    };
-    reader.readAsText(file, "UTF-8");
   };
 
   const saveGame = async () => {
-    // 【修正】休み設定の場合はバリデーションを回避
     if (!inputDate) return alert("日付を選択してください");
-    if (!isOff && !location) return alert("場所を入力してください");
-
     const timeFull = isOff ? "00:00～00:01" : `${startH}:${startM}～${endH}:${endM}`;
     try {
       if (editingGameId) {
         await updateDoc(doc(db, "games", editingGameId), { date: inputDate, time: timeFull, type, location, opponent, isOff });
       } else {
-        // 【修正】休み設定(OFF)でも既存の予定を上書きしないよう、ランダムなIDを使用
         const randomStr = Math.random().toString(36).substring(2, 7);
-        const customId = isOff ? `OFF_${inputDate}_${randomStr}` : `MANUAL_${inputDate}_${startH}${startM}${randomStr}`;
-        await setDoc(doc(db, "games", customId), { date: inputDate, time: timeFull, type, location: location || "", opponent, isOff, memo: "" });
+        const customId = isOff ? `OFF_${inputDate}_${randomStr}` : `MANUAL_${inputDate}_${randomStr}`;
+        await setDoc(doc(db, "games", customId), { date: inputDate, time: timeFull, type, location: location || "", opponent, isOff });
       }
       resetForm();
     } catch (e: any) { alert(e.message); }
@@ -195,16 +182,10 @@ export default function SoccerCalendarApp() {
     const [start, end] = (g.time || "00:00～00:00").split("～");
     const [sh, sm] = (start || "00:00").split(":");
     const [eh, em] = (end || "00:00").split(":");
-    setEditingGameId(g.id);
-    setInputDate(g.date);
-    setStartH(sh || "00"); setStartM(sm || "00");
-    setEndH(eh || "00"); setEndM(em || "00");
-    setType(g.type || "0");
-    setLocation(g.location || "");
-    setOpponent(g.opponent || "");
-    setIsOff(g.isOff || false);
+    setEditingGameId(g.id); setInputDate(g.date); setStartH(sh); setStartM(sm); setEndH(eh); setEndM(em);
+    setType(g.type || "0"); setLocation(g.location || ""); setOpponent(g.opponent || ""); setIsOff(g.isOff || false);
     setSelectedDate(null);
-    window.scrollTo({ top: 400, behavior: 'smooth' });
+    document.getElementById("input-form")?.scrollIntoView({ behavior: "smooth" });
   };
 
   const year = current.getFullYear();
@@ -228,31 +209,15 @@ export default function SoccerCalendarApp() {
     const hasOff = dayData.some((g: any) => g.isOff); 
 
     cells.push(
-      <Card 
-        key={d} 
-        onClick={() => setSelectedDate(dateStr)} 
-        className={`p-1 min-h-[100px] cursor-pointer hover:bg-slate-50 transition-colors relative
-          ${isToday ? 'bg-yellow-50 ring-4 ring-yellow-400 border-yellow-400 z-10' : dayGames.length > 0 ? 'bg-blue-50/10' : ''}`}
-      >
-        <div className="flex justify-between items-start mb-1">
-          <div className={`text-[10px] font-bold ${isToday ? 'text-yellow-700 bg-yellow-200 px-1 rounded' : 'opacity-40'}`}>
-            {d}{isToday && <span className="ml-1 text-[8px]">今日</span>}
-          </div>
-          {hasOff && (
-             <div className="absolute top-1 right-1 w-5 h-5 border-2 border-red-500 rounded-full flex items-center justify-center">
-                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-             </div>
-          )}
+      <Card key={d} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[90px] cursor-pointer hover:bg-slate-50 relative ${isToday ? 'bg-yellow-50 ring-2 ring-yellow-400' : ''}`}>
+        <div className="flex justify-between items-start">
+          <span className={`text-[10px] font-bold ${isToday ? 'text-yellow-700' : 'text-slate-400'}`}>{d}</span>
+          {hasOff && <div className="w-4 h-4 border-2 border-red-500 rounded-full flex items-center justify-center"><div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div></div>}
         </div>
-        <div className="space-y-1">
+        <div className="mt-1 space-y-0.5">
           {dayGames.map((g: any) => {
             const cfg = getTypeConfig(g.type);
-            return (
-              <div key={g.id} className={`${cfg.color} text-white text-[7px] md:text-[9px] p-0.5 rounded flex flex-col leading-tight overflow-hidden`}>
-                <span className="font-bold border-b border-white/20 whitespace-nowrap">{g.time}</span>
-                <span className="truncate">[{cfg.label}]{g.location}{g.opponent && <span className="ml-0.5 italic">vs{g.opponent}</span>}</span>
-              </div>
-            );
+            return <div key={g.id} className={`${cfg.color} text-white text-[7px] p-0.5 rounded truncate`}>[{cfg.label}]{g.location}</div>;
           })}
         </div>
       </Card>
@@ -260,165 +225,93 @@ export default function SoccerCalendarApp() {
   }
 
   const hOpts = Array.from({length:24},(_,i)=>({val:String(i).padStart(2,'0'), label:`${i}時`}));
-  const mOpts = ["00","05","10","15","20","25","30","35","40","45","50","55"].map(m=>({val:m, label:`${m}分`}));
+  const mOpts = ["00","15","30","45"].map(m=>({val:m, label:`${m}分`}));
 
   return (
-    <div className="max-w-4xl mx-auto p-2 md:p-4 bg-white min-h-screen text-slate-900 pb-20">
-      <h1 className="text-xl font-black text-center mb-6">⚽ 部活予定カレンダー</h1>
+    <div className="max-w-4xl mx-auto p-2 bg-white min-h-screen text-slate-900 pb-20">
+      <h1 className="text-xl font-black text-center py-4">⚽ 部活カレンダー</h1>
 
-      <div className="flex flex-col sm:flex-row justify-between items-center mb-4 bg-slate-100 p-2 rounded-xl gap-2">
-        <div className="flex items-center gap-2">
-          <Button onClick={() => setCurrent(new Date(year, month - 1, 1))} className="bg-slate-700">←</Button>
-          <h2 className="text-lg font-black min-w-[120px] text-center">{year}年 {month + 1}月</h2>
-          <Button onClick={() => setCurrent(new Date(year, month + 1, 1))} className="bg-slate-700">→</Button>
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-4 bg-slate-100 p-3 rounded-xl gap-3">
+        <div className="flex items-center gap-4">
+          <button onClick={() => setCurrent(new Date(year, month - 1, 1))} className="p-2 bg-white rounded-lg shadow-sm">←</button>
+          <h2 className="text-lg font-black">{year}年 {month + 1}月</h2>
+          <button onClick={() => setCurrent(new Date(year, month + 1, 1))} className="p-2 bg-white rounded-lg shadow-sm">→</button>
         </div>
-        <div className="flex items-center gap-2">
-           <div className="text-[10px] font-bold text-red-500 flex items-center gap-1 bg-white px-2 py-1 rounded-md border border-red-100">
-             <span className="w-2 h-2 rounded-full bg-red-500"></span> 親の休み
-           </div>
-           <button onClick={() => {
-             const d = getJSTDate();
-             setCurrent(new Date(d.getUTCFullYear(), d.getUTCMonth(), 1));
-           }} className="text-xs font-bold bg-white text-slate-600 px-4 py-2 rounded-lg border border-slate-200 shadow-sm active:bg-slate-50">今日</button>
+        <div className="flex gap-2">
+           <button onClick={syncWithSpreadsheet} disabled={isSyncing} className={`text-xs font-bold px-4 py-2 rounded-lg shadow-md transition ${isSyncing ? 'bg-slate-300' : 'bg-green-600 text-white hover:bg-green-700'}`}>
+             {isSyncing ? "同期中..." : "🔄 直接同期"}
+           </button>
+           <button onClick={() => { const d = getJSTDate(); setCurrent(new Date(d.getUTCFullYear(), d.getUTCMonth(), 1)); }} className="text-xs font-bold bg-white px-4 py-2 rounded-lg border">今日</button>
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 mb-8">
+      <div className="grid grid-cols-7 gap-1 mb-6">
         {["日", "月", "火", "水", "木", "金", "土"].map((d, i) => (
-          <div key={d} className={`text-[10px] font-bold text-center pb-1 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{d}</div>
+          <div key={d} className={`text-[10px] font-bold text-center ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{d}</div>
         ))}
         {cells}
       </div>
 
-      <Card id="input-form" className={`p-4 md:p-6 border-none relative z-10 transition-colors mb-12 ${editingGameId ? 'bg-blue-50 ring-2 ring-blue-500 shadow-lg' : 'bg-slate-50'}`}>
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="font-black text-slate-400 text-[10px] tracking-widest uppercase">
-            {editingGameId ? "Edit Schedule" : "New Schedule"}
-          </h3>
-          <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm hover:bg-slate-50 transition">
-             <span className="text-[10px] font-bold text-slate-500">親の休みの日として設定</span>
-             <input type="checkbox" checked={isOff} onChange={(e) => setIsOff(e.target.checked)} className="w-4 h-4 accent-red-500 cursor-pointer" />
+      <Card id="input-form" className={`p-4 border-none mb-10 ${editingGameId ? 'bg-blue-50 ring-2 ring-blue-500' : 'bg-slate-50'}`}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-bold text-slate-500 text-xs uppercase">{editingGameId ? "編集" : "新規登録"}</h3>
+          <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1 rounded-full border shadow-sm">
+             <span className="text-[10px] font-bold text-slate-500">親の休み</span>
+             <input type="checkbox" checked={isOff} onChange={(e) => setIsOff(e.target.checked)} className="w-4 h-4 accent-red-500" />
           </label>
         </div>
-
-        <div className="grid gap-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 ml-1">日付</label>
-              <Input type="date" value={inputDate} onChange={(e:any) => setInputDate(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 ml-1">区分</label>
-              <select disabled={isOff} className="w-full p-3 rounded-xl border border-slate-300 text-sm font-bold bg-white outline-none disabled:bg-slate-100 disabled:text-slate-400" value={type} onChange={(e)=>setType(e.target.value)}>
-                <option value="0">🏃 練習</option>
-                <option value="1">🤝 トレマ</option>
-                <option value="2">🏆 リーグ戦</option>
-                <option value="3">⚽ その他</option>
-              </select>
-            </div>
+        <div className="grid gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Input type="date" value={inputDate} onChange={(e:any) => setInputDate(e.target.value)} />
+            <select disabled={isOff} className="p-3 rounded-xl border text-sm font-bold bg-white disabled:bg-slate-100" value={type} onChange={(e)=>setType(e.target.value)}>
+              <option value="0">🏃 練習</option><option value="1">🤝 トレマ</option><option value="2">🏆 リーグ戦</option><option value="3">⚽ その他</option>
+            </select>
           </div>
-
           {!isOff && (
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 ml-1">時間</label>
-              <div className="flex flex-wrap items-center gap-1 bg-white p-2 rounded-xl border border-slate-300">
-                <div className="flex items-center flex-1 gap-1">
-                  <Select value={startH} onChange={setStartH} options={hOpts} />
-                  <Select value={startM} onChange={setStartM} options={mOpts} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-300 px-1">～</span>
-                <div className="flex items-center flex-1 gap-1">
-                  <Select value={endH} onChange={setEndH} options={hOpts} />
-                  <Select value={endM} onChange={setEndM} options={mOpts} />
-                </div>
-              </div>
+            <div className="flex items-center gap-2 bg-white p-2 rounded-xl border">
+              <Select value={startH} onChange={setStartH} options={hOpts} /><Select value={startM} onChange={setStartM} options={mOpts} />
+              <span className="text-slate-300">～</span>
+              <Select value={endH} onChange={setEndH} options={hOpts} /><Select value={endM} onChange={setEndM} options={mOpts} />
             </div>
           )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 ml-1">場所</label>
-              {!isOff && (
-                <div className="flex gap-2 mb-2">
-                  <button onClick={() => setLocation("1G")} className="flex-1 py-2 text-xs font-bold bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition">1G</button>
-                  <button onClick={() => setLocation("2G")} className="flex-1 py-2 text-xs font-bold bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition">2G</button>
-                </div>
-              )}
-              <Input disabled={isOff} placeholder={isOff ? "休み設定中" : "場所を自由入力"} value={location} onChange={(e:any) => setLocation(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 ml-1">対戦相手・内容</label>
-              <Input disabled={isOff} placeholder={isOff ? "休み設定中" : "例: 対鳥商"} value={opponent} onChange={(e:any) => setOpponent(e.target.value)} />
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input disabled={isOff} placeholder="場所" value={location} onChange={(e:any) => setLocation(e.target.value)} />
+            <Input disabled={isOff} placeholder="対戦相手" value={opponent} onChange={(e:any) => setOpponent(e.target.value)} />
           </div>
-          
-          <div className="flex gap-2">
-            <Button onClick={saveGame} className={`flex-1 py-4 rounded-2xl shadow-lg mt-2 ${editingGameId ? 'bg-green-600 hover:bg-green-700' : ''} ${isOff ? 'bg-red-500 hover:bg-red-600' : ''}`}>
-              {editingGameId ? "変更を保存する" : isOff ? "親の休みを登録する" : "予定を登録する"}
-            </Button>
-            {editingGameId && <button onClick={resetForm} className="mt-2 px-4 text-xs font-bold text-slate-400 hover:text-slate-600">キャンセル</button>}
-          </div>
+          <Button onClick={saveGame} className={`py-4 rounded-xl shadow-lg ${isOff ? 'bg-red-500' : editingGameId ? 'bg-green-600' : ''}`}>
+            {editingGameId ? "保存する" : isOff ? "休みを登録" : "予定を登録"}
+          </Button>
+          {editingGameId && <button onClick={resetForm} className="text-xs text-slate-400">キャンセル</button>}
         </div>
       </Card>
 
-      <div className="mt-16 pt-8 border-t-2 border-slate-100">
-        <h3 className="text-center font-black text-slate-300 text-[10px] tracking-widest mb-6 uppercase">Admin Settings</h3>
-        <div className="p-6 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
-          <div className="flex flex-col items-center space-y-6">
-            <div className="w-full max-w-xs text-center">
-              <label className="block text-xs font-bold text-slate-500 mb-2">📅 スケジュールCSV取り込み</label>
-              <input 
-                type="file" 
-                accept=".csv, text/csv, application/vnd.ms-excel" 
-                onChange={handleCsvUpload} 
-                disabled={isImporting} 
-                className="text-xs w-full bg-white p-3 rounded-xl border border-slate-200 cursor-pointer" 
-              />
-            </div>
-            <div className="flex flex-col gap-3 w-full max-w-xs">
-              <button onClick={deleteMonthData} className="text-xs font-bold text-orange-600 bg-white border border-orange-100 px-6 py-3 rounded-xl shadow-sm hover:bg-orange-50 transition">🗑️ {month + 1}月の予定のみ削除</button>
-              <button onClick={clearAllData} className="text-xs font-bold text-red-500 bg-white border border-red-100 px-6 py-3 rounded-xl shadow-sm hover:bg-red-50 transition">🔥 全予定を削除</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {selectedDate && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={() => setSelectedDate(null)}>
-          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4 border-b pb-2">
-               <h3 className="text-xl font-black">{selectedDate.replace(/-/g, "/")}</h3>
-            </div>
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-              {(gamesByDate[selectedDate] || []).sort((a:any,b:any)=> (a.isOff?1:0) - (b.isOff?1:0)).map((g: any) => {
-                const cfg = getTypeConfig(g.type);
-                if (g.isOff) {
-                  return (
-                    <div key={g.id} className="p-4 bg-red-50 rounded-2xl border-2 border-red-100 flex justify-between items-center">
-                      <span className="font-black text-red-600 flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-red-500"></span> 親の休み設定
-                      </span>
-                      <button onClick={async () => { if(confirm("休み設定を削除しますか？")) { await deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); } }} className="text-red-400 text-xs font-bold">削除</button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={() => setSelectedDate(null)}>
+          <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-black mb-4 border-b pb-2">{selectedDate}</h3>
+            <div className="space-y-3">
+              {(gamesByDate[selectedDate] || []).sort((a:any,b:any)=> (a.isOff?1:0) - (b.isOff?1:0)).map((g: any) => (
+                <div key={g.id} className={`p-4 rounded-xl border ${g.isOff ? 'bg-red-50 border-red-100' : 'bg-white'}`}>
+                  {g.isOff ? (
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-red-600">🛑 親の休み</span>
+                      <button onClick={async () => { if(confirm("消去しますか？")) { await deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); } }} className="text-xs text-red-300 underline">削除</button>
                     </div>
-                  );
-                }
-                return (
-                  <div key={g.id} className="p-5 bg-white rounded-2xl border-2 border-slate-100 shadow-sm relative">
-                    <span className={`${cfg.color} text-white text-[11px] px-3 py-1 rounded-full font-bold mb-3 inline-block shadow-sm`}>{cfg.full}</span>
-                    <div className="text-2xl font-black text-blue-600 mb-1">🕒 {g.time}</div>
-                    <div className="font-black text-xl text-slate-800 mb-3">📍 {g.location}</div>
-                    {g.opponent && (
-                      <div className="bg-slate-100 p-3 rounded-xl border-l-4 border-blue-500 text-slate-700 font-black">{g.opponent}</div>
-                    )}
-                    <div className="flex gap-6 mt-4 pt-3 border-t border-slate-100">
-                      <button onClick={() => startEdit(g)} className="text-blue-500 text-xs font-bold flex items-center gap-1 hover:underline"><span>✏️</span> 編集</button>
-                      <button onClick={async () => { if(confirm("予定を削除しますか？")) { await deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); } }} className="text-red-400 text-xs font-bold flex items-center gap-1 hover:underline"><span>🗑️</span> 削除</button>
+                  ) : (
+                    <div>
+                      <div className="text-blue-600 font-black text-lg">🕒 {g.time}</div>
+                      <div className="font-bold text-slate-800">📍 {g.location}</div>
+                      {g.opponent && <div className="mt-1 text-sm bg-slate-100 p-1 rounded italic">{g.opponent}</div>}
+                      <div className="mt-2 flex gap-4 text-[10px] font-bold border-t pt-2">
+                        <button onClick={() => startEdit(g)} className="text-blue-500">編集</button>
+                        <button onClick={async () => { if(confirm("削除しますか？")) { await deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); } }} className="text-red-400">削除</button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  )}
+                </div>
+              ))}
             </div>
-            <Button onClick={() => setSelectedDate(null)} className="w-full mt-6 py-4 bg-slate-900 rounded-2xl text-lg">閉じる</Button>
+            <button onClick={() => setSelectedDate(null)} className="w-full mt-6 py-3 bg-slate-900 text-white rounded-xl font-bold">閉じる</button>
           </div>
         </div>
       )}
