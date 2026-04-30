@@ -14,10 +14,9 @@ const firebaseConfig = {
   appId: "1:749909916331:web:bf3b7b79e4586be97215ee"
 };
 
-// ★ここに取得したAPIキーを入力してください
+// ★Google Cloud Consoleで取得したAPIキーを入力してください
 const API_KEY = "AIzaSyDfUgp9d4QsdZT-YkxRl1EVNpPnv-6TA50";
 const SPREADSHEET_ID = "1E6IUcTVV7tzx1A2aLFoZvVuP8hKTyVoSIGmXFqD-Des";
-const SHEET_NAME = "シート1"; 
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -92,37 +91,60 @@ export default function SoccerCalendarApp() {
     return { label: "他", full: "他試合", color: "bg-orange-500", typeId: "3" };
   };
 
-  // --- スプレッドシート同期（API版） ---
+  // --- スプレッドシート同期（API・表示月のタブを検索） ---
   const syncWithSpreadsheet = async () => {
     if (API_KEY.includes("貼り付け")) return alert("APIキーを設定してください");
     
     setIsSyncing(true);
     try {
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}!A1:G100?key=${API_KEY}`;
+      const targetYear = current.getFullYear();
+      const targetMonth = current.getMonth() + 1;
+
+      // 1. 全タブ名を取得
+      const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties.title&key=${API_KEY}`;
+      const metaRes = await fetch(metaUrl);
+      const metaData = await metaRes.json();
+      if (!metaData.sheets) throw new Error("スプレッドシートの情報が取得できませんでした。");
+
+      // 2. 表示中の「月」と一致するタブを厳密に検索
+      const allSheetTitles = metaData.sheets.map((s: any) => s.properties.title);
+      const matchedSheetName = allSheetTitles.find((title: string) => {
+        // 正規表現：他の数字が前に来ない「数字+月」を探す
+        const monthPattern = new RegExp(`(^|[^0-9])${targetMonth}月`);
+        return title.match(monthPattern);
+      });
+
+      if (!matchedSheetName) {
+        throw new Error(`スプレッドシート内に「${targetMonth}月」用のタブが見つかりません。`);
+      }
+
+      // 3. 特定したタブ名でデータを取得
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(matchedSheetName)}!A1:G100?key=${API_KEY}`;
       const res = await fetch(url);
       const data = await res.json();
-
-      if (!data.values) throw new Error("データの取得に失敗しました。共有設定を確認してください。");
+      if (!data.values) throw new Error(`${matchedSheetName} シートにデータがありません。`);
       const rows = data.values;
 
+      // 4. ヘッダー探索
       let headerIdx = -1;
-      for (let i = 0; i < Math.min(rows.length, 5); i++) {
-        if (rows[i][0]?.includes("日") && rows[i][3]?.includes("練習")) { headerIdx = i; break; }
+      for (let i = 0; i < Math.min(rows.length, 10); i++) {
+        if (rows[i][0]?.includes("日") && (rows[i][3]?.includes("種別") || rows[i][3]?.includes("練習"))) { 
+          headerIdx = i; 
+          break; 
+        }
       }
-      if (headerIdx === -1) throw new Error("シートの形式が読み取れません。");
+      if (headerIdx === -1) throw new Error(`${matchedSheetName} 内に「日、曜日、種別」の列が見つかりません。`);
 
-      const firstCell = toHalfWidth(rows[0][0] || "");
-      const monthMatch = firstCell.match(/(\d+)月/);
-      const targetMonth = monthMatch ? parseInt(monthMatch[1]) : (current.getMonth() + 1);
-      const targetYear = firstCell.includes("2027") ? 2027 : 2026;
-      const targetYearMonth = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
-
-      if (!confirm(`${targetMonth}月の予定を同期しますか？\n（既存の予定は上書きされますが、「親の休み」は保持されます）`)) return;
+      if (!confirm(`タブ「${matchedSheetName}」から ${targetMonth}月の予定を同期しますか？\n（親の休みは保持されます）`)) return;
 
       const batch = writeBatch(db);
+      const targetYearMonth = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
+
+      // 既存の予定（親の休み以外）を削除
       const existingDocs = games.filter(g => g.date?.startsWith(targetYearMonth) && !g.isOff);
       existingDocs.forEach(d => batch.delete(doc(db, "games", d.id)));
 
+      // 5. 書き込み処理
       let count = 0;
       for (let i = headerIdx + 1; i < rows.length; i++) {
         const row = rows[i];
@@ -144,14 +166,13 @@ export default function SoccerCalendarApp() {
           location: row[4] || "未定",
           opponent: row[6] || "",
           isOff: false,
-          memo: "API同期"
+          memo: `タブ [${matchedSheetName}] より同期`
         });
         count++;
       }
 
       await batch.commit();
-      setCurrent(new Date(targetYear, targetMonth - 1, 1));
-      alert(`${count} 件の予定を同期しました。`);
+      alert(`同期完了：${matchedSheetName} から ${count} 件取り込みました。`);
     } catch (err: any) {
       alert("同期エラー: " + err.message);
     } finally {
@@ -276,7 +297,7 @@ export default function SoccerCalendarApp() {
           )}
           <div className="grid grid-cols-2 gap-3">
             <Input disabled={isOff} placeholder="場所" value={location} onChange={(e:any) => setLocation(e.target.value)} />
-            <Input disabled={isOff} placeholder="対戦相手" value={opponent} onChange={(e:any) => setOpponent(e.target.value)} />
+            <Input disabled={isOff} placeholder="対戦相手など" value={opponent} onChange={(e:any) => setOpponent(e.target.value)} />
           </div>
           <Button onClick={saveGame} className={`py-4 rounded-xl shadow-lg ${isOff ? 'bg-red-500' : editingGameId ? 'bg-green-600' : ''}`}>
             {editingGameId ? "保存する" : isOff ? "休みを登録" : "予定を登録"}
