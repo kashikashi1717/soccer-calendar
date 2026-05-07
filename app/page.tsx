@@ -163,7 +163,6 @@ export default function SoccerCalendarApp() {
     const cells = [];
     for (let i = 0; i < first; i++) cells.push(<div key={`empty-${i}`} />);
     
-    // 今日判定用の文字列 (YYYY-MM-DD)
     const t = getJSTDate();
     const todayStr = `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`;
 
@@ -209,7 +208,13 @@ export default function SoccerCalendarApp() {
            <Button onClick={syncWithSpreadsheet} disabled={isSyncing} className="bg-green-600 text-xs">
              {isSyncing ? "同期中..." : "🔄 直接同期"}
            </Button>
-           <Button onClick={() => { const d = getJSTDate(); setCurrent(new Date(d.getUTCFullYear(), d.getUTCMonth(), 1)); }} className="bg-white text-slate-900 border text-xs shadow-sm">今日へ移動</Button>
+           {/* 強調するために背景色と文字色をしっかり指定 */}
+           <button 
+             onClick={() => { const d = getJSTDate(); setCurrent(new Date(d.getUTCFullYear(), d.getUTCMonth(), 1)); }} 
+             className="px-3 py-2 bg-slate-800 text-white text-xs font-bold rounded-md shadow-md active:bg-slate-900 active:scale-95 transition-all"
+           >
+             今日へ移動
+           </button>
         </div>
       </div>
 
