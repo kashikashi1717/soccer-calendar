@@ -68,7 +68,6 @@ export default function SoccerCalendarApp() {
   const [isOff, setIsOff] = useState(false); 
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
 
-  // ステートから直接取得（常に最新を保証）
   const year = current.getFullYear();
   const month = current.getMonth();
 
@@ -97,7 +96,6 @@ export default function SoccerCalendarApp() {
       const targetMonth = current.getMonth() + 1;
       const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties.title&key=${API_KEY}`);
       const metaData = await metaRes.json();
-      if (!metaData.sheets) throw new Error("取得失敗");
       const allSheetTitles = metaData.sheets.map((s: any) => s.properties.title);
       const matchedSheetName = allSheetTitles.find((title: string) => {
         const fw = String(targetMonth).replace(/[0-9]/g, (s) => String.fromCharCode(s.charCodeAt(0) + 0xFEE0));
@@ -112,7 +110,6 @@ export default function SoccerCalendarApp() {
       for (let i = 0; i < Math.min(rows.length, 10); i++) {
         if (rows[i][0]?.includes("日") && (rows[i][3]?.includes("種別") || rows[i][3]?.includes("練習"))) { headerIdx = i; break; }
       }
-      if (headerIdx === -1) throw new Error("ヘッダーなし");
       const batch = writeBatch(db);
       const targetYM = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
       games.filter(g => g.date?.startsWith(targetYM) && !g.isOff).forEach(d => batch.delete(doc(db, "games", d.id)));
@@ -153,7 +150,6 @@ export default function SoccerCalendarApp() {
     document.getElementById("input-form")?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // カレンダー描画用データの生成
   const calendarCells = useMemo(() => {
     const days = new Date(year, month + 1, 0).getDate();
     const first = new Date(year, month, 1).getDay();
@@ -167,8 +163,9 @@ export default function SoccerCalendarApp() {
     const cells = [];
     for (let i = 0; i < first; i++) cells.push(<div key={`empty-${i}`} />);
     
-    const today = getJSTDate();
-    const todayStr = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}-${String(today.getUTCDate()).padStart(2, '0')}`;
+    // 今日判定用の文字列 (YYYY-MM-DD)
+    const t = getJSTDate();
+    const todayStr = `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`;
 
     for (let d = 1; d <= days; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -178,9 +175,11 @@ export default function SoccerCalendarApp() {
       const isToday = dateStr === todayStr;
 
       cells.push(
-        <Card key={dateStr} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[90px] cursor-pointer hover:bg-slate-50 relative ${isToday ? 'bg-yellow-50 ring-2 ring-yellow-400' : ''}`}>
+        <Card key={dateStr} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[90px] cursor-pointer relative ${isToday ? 'bg-yellow-100 ring-2 ring-yellow-500' : 'hover:bg-slate-50'}`}>
           <div className="flex justify-between items-start">
-            <span className={`text-[10px] font-bold ${isToday ? 'text-yellow-700' : 'text-slate-400'}`}>{d}</span>
+            <span className={`text-[10px] font-black ${isToday ? 'text-yellow-800' : 'text-slate-400'}`}>
+              {d}{isToday && " (今日)"}
+            </span>
             {hasOff && <div className="w-4 h-4 border-2 border-red-500 rounded-full flex items-center justify-center"><div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div></div>}
           </div>
           <div className="mt-1 space-y-0.5">
@@ -200,7 +199,6 @@ export default function SoccerCalendarApp() {
     <div className="max-w-4xl mx-auto p-2 bg-white min-h-screen text-slate-900 pb-20">
       <h1 className="text-xl font-black text-center py-4">⚽ 部活カレンダー</h1>
       
-      {/* key属性により、月が変わるたびにこのエリアを強制再描画 */}
       <div key={`header-${current.getTime()}`} className="flex flex-col sm:flex-row justify-between items-center mb-4 bg-slate-100 p-3 rounded-xl gap-3">
         <div className="flex items-center gap-4">
           <button onClick={() => setCurrent(new Date(year, month - 1, 1))} className="p-3 bg-white rounded-lg shadow-sm active:bg-slate-200">←</button>
@@ -211,7 +209,7 @@ export default function SoccerCalendarApp() {
            <Button onClick={syncWithSpreadsheet} disabled={isSyncing} className="bg-green-600 text-xs">
              {isSyncing ? "同期中..." : "🔄 直接同期"}
            </Button>
-           <Button onClick={() => { const d = getJSTDate(); setCurrent(new Date(d.getUTCFullYear(), d.getUTCMonth(), 1)); }} className="bg-white text-slate-900 border text-xs">今日</Button>
+           <Button onClick={() => { const d = getJSTDate(); setCurrent(new Date(d.getUTCFullYear(), d.getUTCMonth(), 1)); }} className="bg-white text-slate-900 border text-xs shadow-sm">今日へ移動</Button>
         </div>
       </div>
 
@@ -250,7 +248,7 @@ export default function SoccerCalendarApp() {
             <Input disabled={isOff} placeholder="場所" value={location} onChange={(e:any) => setLocation(e.target.value)} />
             <Input disabled={isOff} placeholder="対戦相手" value={opponent} onChange={(e:any) => setOpponent(e.target.value)} />
           </div>
-          <Button onClick={saveGame} className={`py-4 ${isOff ? 'bg-red-500' : ''}`}>
+          <Button onClick={saveGame} className={`py-4 ${isOff ? 'bg-red-500 hover:bg-red-600' : ''}`}>
             {editingGameId ? "保存" : isOff ? "休み登録" : "予定登録"}
           </Button>
           {editingGameId && <button onClick={resetForm} className="text-xs text-slate-400 mt-2 text-center underline">キャンセル</button>}
@@ -259,15 +257,15 @@ export default function SoccerCalendarApp() {
 
       {selectedDate && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={() => setSelectedDate(null)}>
-          <div className="bg-white w-full max-w-sm rounded-2xl p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-black mb-4 border-b pb-2">{selectedDate}</h3>
-            <div className="space-y-3">
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto">
               {(games.filter(g => g.date === selectedDate)).sort((a:any,b:any)=> (a.isOff?1:0) - (b.isOff?1:0)).map((g: any) => (
                 <div key={g.id} className={`p-4 rounded-xl border ${g.isOff ? 'bg-red-50 border-red-100' : 'bg-white shadow-sm'}`}>
                   {g.isOff ? (
                     <div className="flex justify-between items-center text-red-600 font-bold">
                       <span>🛑 親の休み</span>
-                      <button onClick={async () => { if(confirm("消去？")) { await deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); } }} className="text-xs underline">削除</button>
+                      <button onClick={async () => { if(confirm("消去？")) { await deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); } }} className="text-xs underline p-2">削除</button>
                     </div>
                   ) : (
                     <div>
@@ -275,15 +273,15 @@ export default function SoccerCalendarApp() {
                       <div className="font-bold">📍 {g.location}</div>
                       {g.opponent && <div className="text-xs text-slate-500 mt-1">🆚 {g.opponent}</div>}
                       <div className="mt-3 flex gap-4 text-[10px] font-bold pt-2 border-t">
-                        <button onClick={() => startEdit(g)} className="text-blue-500">編集</button>
-                        <button onClick={async () => { if(confirm("削除？")) { await deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); } }} className="text-red-400">削除</button>
+                        <button onClick={() => startEdit(g)} className="text-blue-500 p-2">編集</button>
+                        <button onClick={async () => { if(confirm("削除？")) { await deleteDoc(doc(db, "games", g.id)); setSelectedDate(null); } }} className="text-red-400 p-2">削除</button>
                       </div>
                     </div>
                   )}
                 </div>
               ))}
             </div>
-            <button onClick={() => setSelectedDate(null)} className="w-full mt-6 py-3 bg-slate-900 text-white rounded-xl font-bold">閉じる</button>
+            <button onClick={() => setSelectedDate(null)} className="w-full mt-6 py-4 bg-slate-900 text-white rounded-xl font-bold">閉じる</button>
           </div>
         </div>
       )}
