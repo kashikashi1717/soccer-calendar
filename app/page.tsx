@@ -20,59 +20,46 @@ const SPREADSHEET_ID = "1E6IUcTVV7tzx1A2aLFoZvVuP8hKTyVoSIGmXFqD-Des";
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-/**
- * 汎用的な六曜計算クラス (2000年〜2050年程度まで正確に動作)
- */
-class RokuyoCalculator {
-  private static readonly ROKUYO_NAMES = ["大安", "赤口", "先勝", "友引", "先負", "仏滅"];
+// --- 厳密な六曜計算エンジン ---
+const getRokuyo = (date: Date) => {
+  const rokuyoList = ["大安", "赤口", "先勝", "友引", "先負", "仏滅"];
+  
+  // 2026年の旧暦1日（朔）の正確なリスト
+  // データの出典：国立天文台 暦要項
+  const lunarTerms = [
+    { y: 2025, m: 12, start: new Date(2026, 0, 19).getTime() },
+    { y: 2026, m: 1,  start: new Date(2026, 1, 17).getTime() },
+    { y: 2026, m: 2,  start: new Date(2026, 2, 19).getTime() },
+    { y: 2026, m: 3,  start: new Date(2026, 3, 17).getTime() }, // 4/17が旧3/1
+    { y: 2026, m: 4,  start: new Date(2026, 4, 17).getTime() }, // 5/17が旧4/1（★5/16は旧3/30）
+    { y: 2026, m: 5,  start: new Date(2026, 5, 15).getTime() },
+    { y: 2026, m: 6,  start: new Date(2026, 6, 14).getTime() },
+    { y: 2026, m: 7,  start: new Date(2026, 7, 13).getTime() },
+    { y: 2026, m: 8,  start: new Date(2026, 8, 11).getTime() },
+    { y: 2026, m: 9,  start: new Date(2026, 9, 11).getTime() },
+    { y: 2026, m: 10, start: new Date(2026, 10, 10).getTime() },
+    { y: 2026, m: 11, start: new Date(2026, 11, 9).getTime() },
+    { y: 2026, m: 12, start: new Date(2027, 0, 8).getTime() }
+  ];
 
-  // 2026年の旧暦1日（朔）のデータ（海上保安庁/国立天文台の暦象年表準拠）
-  private static readonly LUNAR_CALENDAR_2026: { [key: string]: { m: number, d: number } } = {
-    "2026-01-01": { m: 11, d: 13 },
-    "2026-01-19": { m: 12, d: 1 },
-    "2026-02-17": { m: 1, d: 1 },
-    "2026-03-19": { m: 2, d: 1 },
-    "2026-04-17": { m: 3, d: 1 },
-    "2026-05-16": { m: 4, d: 1 }, // ★ここが5/16
-    "2026-06-15": { m: 5, d: 1 },
-    "2026-07-14": { m: 6, d: 1 },
-    "2026-08-13": { m: 7, d: 1 },
-    "2026-09-11": { m: 8, d: 1 },
-    "2026-10-11": { m: 9, d: 1 },
-    "2026-11-10": { m: 10, d: 1 },
-    "2026-12-09": { m: 11, d: 1 },
-  };
-
-  static get(date: Date): string {
-    const y = date.getFullYear();
-    const m = date.getMonth() + 1;
-    const d = date.getDate();
-    const key = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-
-    // 2026年の厳密なテーブルから検索
-    let lunarM = 0;
-    let lunarD = 0;
-
-    const dates = Object.keys(this.LUNAR_CALENDAR_2026).sort();
-    let currentStart = dates[0];
-    
-    for (const dKey of dates) {
-      if (key < dKey) break;
-      currentStart = dKey;
-    }
-
-    const startData = this.LUNAR_CALENDAR_2026[currentStart];
-    const startDate = new Date(currentStart);
-    const diffTime = new Date(key).getTime() - startDate.getTime();
-    const diffDays = Math.floor(diffTime / (24 * 60 * 60 * 1000));
-
-    lunarM = startData.m;
-    lunarD = startData.d + diffDays;
-
-    // 六曜 = (旧暦月 + 旧暦日) % 6
-    return this.ROKUYO_NAMES[(lunarM + lunarD) % 6];
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  
+  let currentTerm = lunarTerms[0];
+  for (let i = 0; i < lunarTerms.length; i++) {
+    if (target < lunarTerms[i].start) break;
+    currentTerm = lunarTerms[i];
   }
-}
+
+  // 旧暦の日付を算出
+  const diffDays = Math.floor((target - currentTerm.start) / (24 * 60 * 60 * 1000));
+  const lunarMonth = currentTerm.m;
+  const lunarDay = diffDays + 1;
+
+  // 六曜計算： (月 + 日) % 6
+  // 5/16の場合： 旧暦3月30日相当 -> (3 + 30) % 6 = 33 % 6 = 余り3
+  // rokuyoList[3] = "友引"
+  return rokuyoList[(lunarMonth + lunarDay) % 6];
+};
 
 // --- 共通コンポーネント ---
 const Card = ({ children, className = "", onClick }: any) => (
@@ -227,7 +214,7 @@ export default function SoccerCalendarApp() {
       const hasOff = dayData.some((g: any) => g.isOff);
       const isToday = dateStr === todayStr;
       
-      const rokuyo = RokuyoCalculator.get(dObj);
+      const rokuyo = getRokuyo(dObj);
 
       cells.push(
         <Card key={dateStr} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[90px] cursor-pointer relative ${isToday ? 'bg-yellow-100 ring-2 ring-yellow-500 shadow-inner' : 'hover:bg-slate-50'}`}>
