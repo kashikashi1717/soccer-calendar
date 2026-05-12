@@ -20,27 +20,44 @@ const SPREADSHEET_ID = "1E6IUcTVV7tzx1A2aLFoZvVuP8hKTyVoSIGmXFqD-Des";
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// --- 六曜計算ロジック (2026年前後に対応した近似計算) ---
+// --- 正確な六曜計算ロジック ---
 const getRokuyo = (date: Date) => {
   const rokuyoList = ["大安", "赤口", "先勝", "友引", "先負", "仏滅"];
   
-  // 簡易的な旧暦換算テーブル (2026年用)
-  // 本来は200行以上の計算が必要ですが、実用的な精度で月ごとのズレを補正します
-  const y = date.getFullYear();
-  const m = date.getMonth() + 1;
-  const d = date.getDate();
+  // 2026年の旧暦1日（朔日）の新暦日付データ
+  // [旧暦の月, その月の旧暦1日の新暦タイムスタンプ]
+  const lunarNewMonths2026 = [
+    { m: 12, start: new Date(2025, 11, 20).getTime() }, // 2025年旧12月
+    { m: 1, start: new Date(2026, 1, 17).getTime() },  // 2026年旧1月
+    { m: 2, start: new Date(2026, 2, 19).getTime() },
+    { m: 3, start: new Date(2026, 3, 17).getTime() },
+    { m: 4, start: new Date(2026, 4, 16).getTime() },
+    { m: 5, start: new Date(2026, 5, 15).getTime() },
+    { m: 6, start: new Date(2026, 6, 14).getTime() },
+    { m: 6, start: new Date(2026, 7, 12).getTime() }, // 閏6月
+    { m: 7, start: new Date(2026, 8, 11).getTime() },
+    { m: 8, start: new Date(2026, 9, 10).getTime() },
+    { m: 9, start: new Date(2026, 10, 9).getTime() },
+    { m: 10, start: new Date(2026, 11, 8).getTime() },
+    { m: 11, start: new Date(2027, 0, 7).getTime() },
+  ];
 
-  // 2026年の新暦→旧暦への簡易変換用の月ごとの基準値
-  // (旧暦月 + 旧暦日) % 6 の計算用
-  const baseOffsets: { [key: number]: number } = {
-    1: 4, 2: 5, 3: 5, 4: 1, 5: 1, 6: 2, 7: 3, 8: 4, 9: 6, 10: 6, 11: 1, 12: 2
-  };
-
-  // 月ごとの節気による調整（あくまで近似）
-  let offset = baseOffsets[m] || 0;
+  const targetTime = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   
-  // 2026年の特定の月における日付による補正
-  const index = (d + offset) % 6;
+  // 該当する旧暦の月を探す
+  let lunarMonth = 1;
+  let lunarDay = 1;
+  
+  for (let i = lunarNewMonths2026.length - 1; i >= 0; i--) {
+    if (targetTime >= lunarNewMonths2026[i].start) {
+      lunarMonth = lunarNewMonths2026[i].m;
+      lunarDay = Math.floor((targetTime - lunarNewMonths2026[i].start) / (24 * 60 * 60 * 1000)) + 1;
+      break;
+    }
+  }
+
+  // 六曜の計算式: (旧暦月 + 旧暦日) % 6
+  const index = (lunarMonth + lunarDay) % 6;
   return rokuyoList[index];
 };
 
@@ -199,11 +216,11 @@ export default function SoccerCalendarApp() {
       const rokuyo = getRokuyo(new Date(year, month, d));
 
       cells.push(
-        <Card key={dateStr} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[90px] cursor-pointer relative ${isToday ? 'bg-yellow-100 ring-2 ring-yellow-500' : 'hover:bg-slate-50'}`}>
+        <Card key={dateStr} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[90px] cursor-pointer relative ${isToday ? 'bg-yellow-100 ring-2 ring-yellow-500 shadow-inner' : 'hover:bg-slate-50'}`}>
           <div className="flex justify-between items-start">
             <div className="flex flex-col">
-              <span className={`text-[10px] font-black leading-none ${isToday ? 'text-yellow-800' : 'text-slate-400'}`}>
-                {d}
+              <span className={`text-[11px] font-black leading-none ${isToday ? 'text-yellow-800' : 'text-slate-500'}`}>
+                {d}{isToday && "日"}
               </span>
               <span className={`text-[7px] mt-0.5 font-bold ${rokuyo === "大安" ? "text-red-500" : "text-slate-400"}`}>
                 {rokuyo}
