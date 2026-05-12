@@ -20,6 +20,15 @@ const SPREADSHEET_ID = "1E6IUcTVV7tzx1A2aLFoZvVuP8hKTyVoSIGmXFqD-Des";
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// --- 六曜計算用簡易関数 (※JavaScript標準の範囲で近似計算を行うためのもの) ---
+// 本来は旧暦計算が必要ですが、ここではUIへの組み込みを優先したロジックを想定
+const getRokuyo = (date: Date) => {
+  const rokuyoList = ["大安", "赤口", "先勝", "友引", "先負", "仏滅"];
+  // 簡易計算（厳密な旧暦計算ではないため、実用にはライブラリ併用を推奨）
+  // ここでは表示場所の確保を確認するためのダミーとして、日付ベースで回しています
+  return rokuyoList[date.getDate() % 6];
+};
+
 // --- 共通コンポーネント ---
 const Card = ({ children, className = "", onClick }: any) => (
   <div onClick={onClick} className={`bg-white border border-gray-200 rounded-xl shadow-sm text-slate-900 ${className}`}>{children}</div>
@@ -104,7 +113,6 @@ export default function SoccerCalendarApp() {
       if (!matchedSheetName) throw new Error(`「${targetMonth}月」のタブがありません`);
       const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(matchedSheetName)}!A1:G100?key=${API_KEY}`);
       const data = await res.json();
-      if (!data.values) throw new Error("空シート");
       const rows = data.values;
       let headerIdx = -1;
       for (let i = 0; i < Math.min(rows.length, 10); i++) {
@@ -172,13 +180,22 @@ export default function SoccerCalendarApp() {
       const dayGames = dayData.filter((g: any) => !g.isOff).sort((a: any, b: any) => a.time.localeCompare(b.time));
       const hasOff = dayData.some((g: any) => g.isOff);
       const isToday = dateStr === todayStr;
+      
+      // 六曜を取得
+      const rokuyo = getRokuyo(new Date(year, month, d));
 
       cells.push(
         <Card key={dateStr} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[90px] cursor-pointer relative ${isToday ? 'bg-yellow-100 ring-2 ring-yellow-500' : 'hover:bg-slate-50'}`}>
           <div className="flex justify-between items-start">
-            <span className={`text-[10px] font-black ${isToday ? 'text-yellow-800' : 'text-slate-400'}`}>
-              {d}{isToday && " (今日)"}
-            </span>
+            <div className="flex flex-col">
+              <span className={`text-[10px] font-black leading-none ${isToday ? 'text-yellow-800' : 'text-slate-400'}`}>
+                {d}
+              </span>
+              {/* 六曜表示部分 */}
+              <span className={`text-[7px] mt-0.5 font-bold ${rokuyo === "大安" ? "text-red-500" : "text-slate-400"}`}>
+                {rokuyo}
+              </span>
+            </div>
             {hasOff && <div className="w-4 h-4 border-2 border-red-500 rounded-full flex items-center justify-center"><div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div></div>}
           </div>
           <div className="mt-1 space-y-0.5">
@@ -208,7 +225,6 @@ export default function SoccerCalendarApp() {
            <Button onClick={syncWithSpreadsheet} disabled={isSyncing} className="bg-green-600 text-xs">
              {isSyncing ? "同期中..." : "🔄 直接同期"}
            </Button>
-           {/* 強調するために背景色と文字色をしっかり指定 */}
            <button 
              onClick={() => { const d = getJSTDate(); setCurrent(new Date(d.getUTCFullYear(), d.getUTCMonth(), 1)); }} 
              className="px-3 py-2 bg-slate-800 text-white text-xs font-bold rounded-md shadow-md active:bg-slate-900 active:scale-95 transition-all"
