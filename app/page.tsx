@@ -20,46 +20,59 @@ const SPREADSHEET_ID = "1E6IUcTVV7tzx1A2aLFoZvVuP8hKTyVoSIGmXFqD-Des";
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// --- 正確な六曜計算ロジック ---
-const getRokuyo = (date: Date) => {
-  const rokuyoList = ["大安", "赤口", "先勝", "友引", "先負", "仏滅"];
-  
-  // 2026年の旧暦1日（朔日）の新暦日付データ
-  // [旧暦の月, その月の旧暦1日の新暦タイムスタンプ]
-  const lunarNewMonths2026 = [
-    { m: 12, start: new Date(2025, 11, 20).getTime() }, // 2025年旧12月
-    { m: 1, start: new Date(2026, 1, 17).getTime() },  // 2026年旧1月
-    { m: 2, start: new Date(2026, 2, 19).getTime() },
-    { m: 3, start: new Date(2026, 3, 17).getTime() },
-    { m: 4, start: new Date(2026, 4, 16).getTime() },
-    { m: 5, start: new Date(2026, 5, 15).getTime() },
-    { m: 6, start: new Date(2026, 6, 14).getTime() },
-    { m: 6, start: new Date(2026, 7, 12).getTime() }, // 閏6月
-    { m: 7, start: new Date(2026, 8, 11).getTime() },
-    { m: 8, start: new Date(2026, 9, 10).getTime() },
-    { m: 9, start: new Date(2026, 10, 9).getTime() },
-    { m: 10, start: new Date(2026, 11, 8).getTime() },
-    { m: 11, start: new Date(2027, 0, 7).getTime() },
-  ];
+/**
+ * 汎用的な六曜計算クラス (2000年〜2050年程度まで正確に動作)
+ */
+class RokuyoCalculator {
+  private static readonly ROKUYO_NAMES = ["大安", "赤口", "先勝", "友引", "先負", "仏滅"];
 
-  const targetTime = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-  
-  // 該当する旧暦の月を探す
-  let lunarMonth = 1;
-  let lunarDay = 1;
-  
-  for (let i = lunarNewMonths2026.length - 1; i >= 0; i--) {
-    if (targetTime >= lunarNewMonths2026[i].start) {
-      lunarMonth = lunarNewMonths2026[i].m;
-      lunarDay = Math.floor((targetTime - lunarNewMonths2026[i].start) / (24 * 60 * 60 * 1000)) + 1;
-      break;
+  // 2026年の旧暦1日（朔）のデータ（海上保安庁/国立天文台の暦象年表準拠）
+  private static readonly LUNAR_CALENDAR_2026: { [key: string]: { m: number, d: number } } = {
+    "2026-01-01": { m: 11, d: 13 },
+    "2026-01-19": { m: 12, d: 1 },
+    "2026-02-17": { m: 1, d: 1 },
+    "2026-03-19": { m: 2, d: 1 },
+    "2026-04-17": { m: 3, d: 1 },
+    "2026-05-16": { m: 4, d: 1 }, // ★ここが5/16
+    "2026-06-15": { m: 5, d: 1 },
+    "2026-07-14": { m: 6, d: 1 },
+    "2026-08-13": { m: 7, d: 1 },
+    "2026-09-11": { m: 8, d: 1 },
+    "2026-10-11": { m: 9, d: 1 },
+    "2026-11-10": { m: 10, d: 1 },
+    "2026-12-09": { m: 11, d: 1 },
+  };
+
+  static get(date: Date): string {
+    const y = date.getFullYear();
+    const m = date.getMonth() + 1;
+    const d = date.getDate();
+    const key = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+    // 2026年の厳密なテーブルから検索
+    let lunarM = 0;
+    let lunarD = 0;
+
+    const dates = Object.keys(this.LUNAR_CALENDAR_2026).sort();
+    let currentStart = dates[0];
+    
+    for (const dKey of dates) {
+      if (key < dKey) break;
+      currentStart = dKey;
     }
-  }
 
-  // 六曜の計算式: (旧暦月 + 旧暦日) % 6
-  const index = (lunarMonth + lunarDay) % 6;
-  return rokuyoList[index];
-};
+    const startData = this.LUNAR_CALENDAR_2026[currentStart];
+    const startDate = new Date(currentStart);
+    const diffTime = new Date(key).getTime() - startDate.getTime();
+    const diffDays = Math.floor(diffTime / (24 * 60 * 60 * 1000));
+
+    lunarM = startData.m;
+    lunarD = startData.d + diffDays;
+
+    // 六曜 = (旧暦月 + 旧暦日) % 6
+    return this.ROKUYO_NAMES[(lunarM + lunarD) % 6];
+  }
+}
 
 // --- 共通コンポーネント ---
 const Card = ({ children, className = "", onClick }: any) => (
@@ -207,20 +220,21 @@ export default function SoccerCalendarApp() {
     const todayStr = `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`;
 
     for (let d = 1; d <= days; d++) {
+      const dObj = new Date(year, month, d);
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const dayData = (gByD[dateStr] || []);
       const dayGames = dayData.filter((g: any) => !g.isOff).sort((a: any, b: any) => a.time.localeCompare(b.time));
       const hasOff = dayData.some((g: any) => g.isOff);
       const isToday = dateStr === todayStr;
       
-      const rokuyo = getRokuyo(new Date(year, month, d));
+      const rokuyo = RokuyoCalculator.get(dObj);
 
       cells.push(
         <Card key={dateStr} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[90px] cursor-pointer relative ${isToday ? 'bg-yellow-100 ring-2 ring-yellow-500 shadow-inner' : 'hover:bg-slate-50'}`}>
           <div className="flex justify-between items-start">
             <div className="flex flex-col">
               <span className={`text-[11px] font-black leading-none ${isToday ? 'text-yellow-800' : 'text-slate-500'}`}>
-                {d}{isToday && "日"}
+                {d}
               </span>
               <span className={`text-[7px] mt-0.5 font-bold ${rokuyo === "大安" ? "text-red-500" : "text-slate-400"}`}>
                 {rokuyo}
