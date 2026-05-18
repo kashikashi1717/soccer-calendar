@@ -24,14 +24,12 @@ const db = getFirestore(app);
 const getRokuyo = (date: Date) => {
   const rokuyoList = ["大安", "赤口", "先勝", "友引", "先負", "仏滅"];
   
-  // 2026年の旧暦1日（朔）の正確なリスト
-  // データの出典：国立天文台 暦要項
   const lunarTerms = [
     { y: 2025, m: 12, start: new Date(2026, 0, 19).getTime() },
     { y: 2026, m: 1,  start: new Date(2026, 1, 17).getTime() },
     { y: 2026, m: 2,  start: new Date(2026, 2, 19).getTime() },
-    { y: 2026, m: 3,  start: new Date(2026, 3, 17).getTime() }, // 4/17が旧3/1
-    { y: 2026, m: 4,  start: new Date(2026, 4, 17).getTime() }, // 5/17が旧4/1（★5/16は旧3/30）
+    { y: 2026, m: 3,  start: new Date(2026, 3, 17).getTime() }, 
+    { y: 2026, m: 4,  start: new Date(2026, 4, 17).getTime() }, 
     { y: 2026, m: 5,  start: new Date(2026, 5, 15).getTime() },
     { y: 2026, m: 6,  start: new Date(2026, 6, 14).getTime() },
     { y: 2026, m: 7,  start: new Date(2026, 7, 13).getTime() },
@@ -50,20 +48,16 @@ const getRokuyo = (date: Date) => {
     currentTerm = lunarTerms[i];
   }
 
-  // 旧暦の日付を算出
   const diffDays = Math.floor((target - currentTerm.start) / (24 * 60 * 60 * 1000));
   const lunarMonth = currentTerm.m;
   const lunarDay = diffDays + 1;
 
-  // 六曜計算： (月 + 日) % 6
-  // 5/16の場合： 旧暦3月30日相当 -> (3 + 30) % 6 = 33 % 6 = 余り3
-  // rokuyoList[3] = "友引"
   return rokuyoList[(lunarMonth + lunarDay) % 6];
 };
 
 // --- 共通コンポーネント ---
-const Card = ({ children, className = "", onClick }: any) => (
-  <div onClick={onClick} className={`bg-white border border-gray-200 rounded-xl shadow-sm text-slate-900 ${className}`}>{children}</div>
+const Card = ({ children, className = "", onClick, id }: any) => (
+  <div id={id} onClick={onClick} className={`bg-white border border-gray-200 rounded-xl shadow-sm text-slate-900 ${className}`}>{children}</div>
 );
 
 const Button = ({ children, onClick, className = "", disabled = false }: any) => (
@@ -190,6 +184,21 @@ export default function SoccerCalendarApp() {
     document.getElementById("input-form")?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // 「今日へ移動」処理（強制再レンダリング + スクロール）
+  const handleGoToToday = () => {
+    const d = getJSTDate();
+    // 参照を確実に変えるため、新しいインスタンスをセット
+    setCurrent(new Date(d.getUTCFullYear(), d.getUTCMonth(), 1));
+
+    // カレンダー描画後に「今日」のセルまでスクロール
+    setTimeout(() => {
+      const todayElement = document.getElementById("calendar-today");
+      if (todayElement) {
+        todayElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 100);
+  };
+
   const calendarCells = useMemo(() => {
     const days = new Date(year, month + 1, 0).getDate();
     const first = new Date(year, month, 1).getDay();
@@ -217,7 +226,12 @@ export default function SoccerCalendarApp() {
       const rokuyo = getRokuyo(dObj);
 
       cells.push(
-        <Card key={dateStr} onClick={() => setSelectedDate(dateStr)} className={`p-1 min-h-[90px] cursor-pointer relative ${isToday ? 'bg-yellow-100 ring-2 ring-yellow-500 shadow-inner' : 'hover:bg-slate-50'}`}>
+        <Card 
+          key={dateStr} 
+          id={isToday ? "calendar-today" : undefined} // 今日のセルにIDを付与
+          onClick={() => setSelectedDate(dateStr)} 
+          className={`p-1 min-h-[90px] cursor-pointer relative ${isToday ? 'bg-yellow-100 ring-2 ring-yellow-500 shadow-inner' : 'hover:bg-slate-50'}`}
+        >
           <div className="flex justify-between items-start">
             <div className="flex flex-col">
               <span className={`text-[11px] font-black leading-none ${isToday ? 'text-yellow-800' : 'text-slate-500'}`}>
@@ -257,7 +271,7 @@ export default function SoccerCalendarApp() {
              {isSyncing ? "同期中..." : "🔄 直接同期"}
            </Button>
            <button 
-             onClick={() => { const d = getJSTDate(); setCurrent(new Date(d.getUTCFullYear(), d.getUTCMonth(), 1)); }} 
+             onClick={handleGoToToday} 
              className="px-3 py-2 bg-slate-800 text-white text-xs font-bold rounded-md shadow-md active:bg-slate-900 active:scale-95 transition-all"
            >
              今日へ移動
